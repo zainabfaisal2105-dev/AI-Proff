@@ -6,18 +6,18 @@ import {
   ArrowRight,
   AlertCircle,
   Sparkles,
-  CheckCircle2,
+  BookOpen,
   FileCheck2,
-  Table2,
-  Cpu,
-  CornerDownRight,
-  ShieldCheck,
   Bookmark,
   Clock,
+  CornerDownRight,
   Layers,
+  CheckCircle2,
 } from 'lucide-react';
 import { SAMPLE_DOCUMENTS, SampleDocument } from '../data/sampleDocuments';
 import { SavedDocumentSession } from '../types';
+import { StatusBead } from './StatusBead';
+import { DonutRing } from './DonutRing';
 
 interface SourceInputProps {
   onProcessFile: (file: File) => void;
@@ -94,315 +94,355 @@ export const SourceInput: React.FC<SourceInputProps> = ({
   };
 
   return (
-    <div className="w-full max-w-[960px] mx-auto">
-      {/* 4. LANDING / INPUT SCREEN VERTICAL RHYTHM */}
-      {/* PAGE TITLE: 48px top margin, 32-40px font size desktop, 26-32px mobile */}
-      <div className="text-center pt-[48px]">
-        <h1 className="text-[28px] sm:text-[34px] lg:text-[38px] font-serif font-bold tracking-tight text-[#18221D] dark:text-[#F5F6F8] leading-tight">
-          Understand your documents. Completely.
+    <div className="w-full max-w-[1020px] mx-auto space-y-[32px] pb-[40px]">
+      {/* Page Title & Tactile Subtitle */}
+      <div className="text-center pt-[28px] sm:pt-[36px] space-y-[12px]">
+        <div className="inline-flex items-center gap-[8px] px-[14px] py-[6px] rounded-full bg-[#467E66] dark:bg-[#27292C] text-[12px] font-mono font-medium text-[#F4F9F6] dark:text-[#E8E4DD] border border-[#64A385] dark:border-[#3E4249] mb-[4px]">
+          <StatusBead status="ready" size="sm" showPulse />
+          <span>AI Research Reading Partner</span>
+        </div>
+        <h1 className="text-[32px] sm:text-[40px] lg:text-[44px] font-serif font-bold tracking-tight text-[#F5FAF6] dark:text-[#E8E4DD] leading-[1.15]">
+          Understand complex papers without losing truth.
         </h1>
-        {/* SHORT DESCRIPTION: 10-14px below title, 15-16px body font, max 65-75ch width */}
-        <p className="mt-[12px] text-[15px] sm:text-[16px] text-[#4D5E56] dark:text-[#9EA2AE] max-w-[70ch] mx-auto leading-relaxed">
-          A high-fidelity document summarizer engineered to preserve all statistics, conditions, and original structure without inventing or extrapolating.
+        <p className="text-[15px] sm:text-[16px] text-[#D4E8DC] dark:text-[#9A9691] max-w-[68ch] mx-auto leading-relaxed">
+          Upload research papers, technical specs, or dense documents. Read with section-by-section guidance, on-demand simplification, and strict source grounding.
         </p>
       </div>
 
-      {/* INPUT / UPLOAD AREA: 28-36px below description */}
-      <div className="mt-[32px] bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#3C4049] rounded-[16px] shadow-[0_8px_24px_-4px_rgba(40,60,50,0.08),0_2px_6px_rgba(40,60,50,0.03)] dark:shadow-[0_10px_30px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.07)] overflow-hidden">
-        {/* Compact Tab Bar */}
-        <div className="flex border-b border-[#DCE3DF] dark:border-[#373A42] bg-[#F3F7F4] dark:bg-[#222428] text-[13px]">
-          <button
-            type="button"
-            onClick={() => { setActiveTab('upload'); clearError(); }}
-            className={`flex-1 h-[44px] font-medium transition-colors flex items-center justify-center gap-[8px] cursor-pointer ${
-              activeTab === 'upload'
-                ? 'bg-white dark:bg-[#2A2D33] text-[#18221D] dark:text-[#F5F6F8] border-b-2 border-[#BA7A48] dark:border-[#EDEDED]'
-                : 'text-[#5D6D65] dark:text-[#8A8F9B] hover:text-[#18221D] dark:hover:text-[#F5F6F8]'
-            }`}
-          >
-            <UploadCloud className="w-[15px] h-[15px] text-[#BA7A48] dark:text-[#D2D5DD]" />
-            <span>Upload Document</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('url'); clearError(); }}
-            className={`flex-1 h-[44px] font-medium transition-colors flex items-center justify-center gap-[8px] cursor-pointer ${
-              activeTab === 'url'
-                ? 'bg-white dark:bg-[#2A2D33] text-[#18221D] dark:text-[#F5F6F8] border-b-2 border-[#BA7A48] dark:border-[#EDEDED]'
-                : 'text-[#5D6D65] dark:text-[#8A8F9B] hover:text-[#18221D] dark:hover:text-[#F5F6F8]'
-            }`}
-          >
-            <LinkIcon className="w-[15px] h-[15px] text-[#BA7A48] dark:text-[#D2D5DD]" />
-            <span>Web URL</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('paste'); clearError(); }}
-            className={`flex-1 h-[44px] font-medium transition-colors flex items-center justify-center gap-[8px] cursor-pointer ${
-              activeTab === 'paste'
-                ? 'bg-white dark:bg-[#2A2D33] text-[#18221D] dark:text-[#F5F6F8] border-b-2 border-[#BA7A48] dark:border-[#EDEDED]'
-                : 'text-[#5D6D65] dark:text-[#8A8F9B] hover:text-[#18221D] dark:hover:text-[#F5F6F8]'
-            }`}
-          >
-            <FileText className="w-[15px] h-[15px] text-[#BA7A48] dark:text-[#D2D5DD]" />
-            <span>Paste Text</span>
-          </button>
+      {/* Main Upload / Ingestion Clay Card */}
+      <div className="clay-card p-[24px] sm:p-[32px] relative">
+        {/* Status bead in top-left corner */}
+        <div className="absolute top-[18px] left-[20px] flex items-center gap-[6px]">
+          <StatusBead status="ready" label="Intake Ready" />
         </div>
 
-        {/* Tab 1: File Upload */}
-        {activeTab === 'upload' && (
-          <div className="p-[20px] sm:p-[24px]">
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`w-full h-[200px] sm:h-[220px] lg:h-[260px] rounded-[14px] border-2 border-dashed text-center transition-all cursor-pointer flex flex-col items-center justify-center p-[16px] sm:p-[20px] ${
-                isDragging
-                  ? 'border-[#BA7A48] dark:border-[#EDEDED] bg-[#FAF5F0] dark:bg-[#34373F]'
-                  : 'border-[#CCD7D1] dark:border-[#424650] hover:border-[#BA7A48] dark:hover:border-[#727784] bg-[#FAFBF9] dark:bg-[#23252A]'
+        {/* Tactile Pill-style Tab Switcher */}
+        <div className="flex justify-center pt-[10px] pb-[20px]">
+          <div className="clay-well p-[4px] inline-flex items-center gap-[4px] rounded-full">
+            <button
+              type="button"
+              onClick={() => { setActiveTab('upload'); clearError(); }}
+              className={`h-[38px] px-[20px] rounded-full text-[13px] font-medium transition-all flex items-center gap-[8px] cursor-pointer ${
+                activeTab === 'upload'
+                  ? 'clay-btn-primary shadow-xs'
+                  : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
               }`}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt"
-                onChange={handleFileSelect}
-                disabled={isLoading}
-              />
+              <UploadCloud className="w-[15px] h-[15px]" />
+              <span>Upload Document</span>
+            </button>
 
-              {/* Small icon */}
-              <div className="w-[44px] h-[44px] rounded-full bg-[#EAEFEA] dark:bg-[#2D3037] flex items-center justify-center text-[#BA7A48] dark:text-[#EDEDED]">
-                <UploadCloud className="w-[22px] h-[22px]" />
-              </div>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('url'); clearError(); }}
+              className={`h-[38px] px-[20px] rounded-full text-[13px] font-medium transition-all flex items-center gap-[8px] cursor-pointer ${
+                activeTab === 'url'
+                  ? 'clay-btn-primary shadow-xs'
+                  : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
+              }`}
+            >
+              <LinkIcon className="w-[14px] h-[14px]" />
+              <span>Web URL</span>
+            </button>
 
-              {/* 12-16px gap -> Primary text */}
-              <div className="mt-[14px] text-[15px] sm:text-[16px] font-semibold text-[#18221D] dark:text-[#F5F6F8]">
-                Upload or drop your document
-              </div>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('paste'); clearError(); }}
+              className={`h-[38px] px-[20px] rounded-full text-[13px] font-medium transition-all flex items-center gap-[8px] cursor-pointer ${
+                activeTab === 'paste'
+                  ? 'clay-btn-primary shadow-xs'
+                  : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
+              }`}
+            >
+              <FileText className="w-[14px] h-[14px]" />
+              <span>Paste Text</span>
+            </button>
+          </div>
+        </div>
 
-              {/* 8px gap -> Supported formats */}
-              <div className="mt-[8px] text-[12px] sm:text-[13px] font-mono text-[#6C7A73] dark:text-[#8E93A0]">
-                PDF · DOCX · PPTX · XLSX · CSV · TXT
-              </div>
+        {/* Tab 1: Drag-and-Drop Clay Dropzone */}
+        {activeTab === 'upload' && (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`w-full h-[220px] sm:h-[260px] rounded-[20px] border-2 border-dashed text-center transition-all cursor-pointer flex flex-col items-center justify-center p-[20px] ${
+              isDragging
+                ? 'border-[#D9924D] dark:border-[#E8863C] bg-[#D6E0D6]/80 dark:bg-[#3D4148]'
+                : 'border-[#B8C8B8] dark:border-[#4B505B] hover:border-[#D9924D] dark:hover:border-[#E8863C] clay-well'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt"
+              onChange={handleFileSelect}
+              disabled={isLoading}
+            />
 
-              {/* 20-24px gap -> Primary Button */}
-              <div className="mt-[22px]">
-                <div className="h-[46px] min-w-[130px] px-[22px] rounded-[10px] bg-[#BA7A48] hover:bg-[#A96D3C] text-white dark:bg-[#EDEDED] dark:text-[#16181C] dark:hover:bg-white text-[13px] sm:text-[14px] font-medium transition-all flex items-center justify-center gap-[8px] shadow-[0_4px_14px_rgba(186,122,72,0.3),inset_0_1px_1px_rgba(255,255,255,0.3)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.9)]">
-                  <FileCheck2 className="w-[15px] h-[15px]" />
-                  <span>Browse files</span>
-                </div>
+            {/* Circular embossed icon plate */}
+            <div className="w-[56px] h-[56px] rounded-full bg-[#E3ECE3] dark:bg-[#35383D] flex items-center justify-center text-[#D9924D] dark:text-[#E8863C] shadow-[0_4px_12px_rgba(70,95,80,0.12),inset_0_1.5px_0_rgba(255,255,255,0.7)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]">
+              <UploadCloud className="w-[28px] h-[28px]" />
+            </div>
+
+            <div className="mt-[14px] text-[16px] sm:text-[17px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD]">
+              Drop your PDF, Word doc, or paper here
+            </div>
+
+            <p className="mt-[6px] text-[12px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+              PDF · DOCX · PPTX · XLSX · CSV · TXT (up to 30MB)
+            </p>
+
+            <div className="mt-[18px]">
+              <div className="clay-btn-primary h-[44px] px-[24px] text-[13px] font-medium flex items-center gap-[8px]">
+                <FileCheck2 className="w-[15px] h-[15px]" />
+                <span>Select file from computer</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab 2: Web URL */}
+        {/* Tab 2: Web URL Intake */}
         {activeTab === 'url' && (
-          <form onSubmit={handleUrlSubmit} className="p-[20px] sm:p-[24px] space-y-[16px]">
+          <form onSubmit={handleUrlSubmit} className="space-y-[16px] max-w-[720px] mx-auto py-[10px]">
             <div>
-              <label className="block text-[13px] font-semibold text-[#283830] dark:text-[#D0D4DE] mb-[8px]">
-                Document or Article Web Address
+              <label className="block text-[13px] font-serif font-semibold text-[#3A3A38] dark:text-[#E8E4DD] mb-[8px]">
+                Enter article or paper URL
               </label>
-              {/* URL row: 70-80% input, 20-30% button, 8-12px gap, 44-48px heights */}
-              <div className="flex flex-col sm:flex-row gap-[10px]">
-                <div className="relative w-full sm:w-[75%]">
-                  <div className="absolute inset-y-0 left-0 pl-[12px] flex items-center pointer-events-none text-[#75857D] dark:text-[#7A808C]">
-                    <LinkIcon className="w-[15px] h-[15px]" />
+              <div className="flex flex-col sm:flex-row gap-[12px]">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-[16px] flex items-center pointer-events-none text-[#8A8880] dark:text-[#9A9691]">
+                    <LinkIcon className="w-[16px] h-[16px]" />
                   </div>
                   <input
                     type="url"
-                    placeholder="https://example.com/research-paper-or-filing"
+                    placeholder="https://arxiv.org/html/... or any article link"
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
                     disabled={isLoading}
-                    className="w-full h-[46px] pl-[36px] pr-[12px] text-[13px] rounded-[10px] border border-[#CCD7D1] dark:border-[#424650] bg-white dark:bg-[#1E2024] text-[#18221D] dark:text-[#F5F6F8] placeholder-[#8A9992] dark:placeholder-[#727784] focus:outline-hidden focus:border-[#BA7A48] dark:focus:border-[#8E94A2]"
+                    className="clay-well w-full h-[48px] pl-[44px] pr-[16px] text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] dark:placeholder-[#787D88] focus:outline-hidden focus:ring-2 focus:ring-[#D9924D] dark:focus:ring-[#E8863C]"
                     required
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isLoading || !urlInput.trim()}
-                  className="w-full sm:w-[25%] h-[46px] min-w-[120px] px-[20px] text-[13px] font-medium rounded-[10px] bg-[#BA7A48] hover:bg-[#A96D3C] text-white dark:bg-[#EDEDED] dark:text-[#16181C] dark:hover:bg-white disabled:opacity-50 transition-all flex items-center justify-center gap-[8px] shadow-[0_4px_14px_rgba(186,122,72,0.3),inset_0_1px_1px_rgba(255,255,255,0.3)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.9)] cursor-pointer shrink-0"
+                  className="clay-btn-primary h-[48px] px-[24px] text-[13px] font-medium flex items-center justify-center gap-[8px] shrink-0 cursor-pointer disabled:opacity-50"
                 >
-                  <span>Analyze URL</span>
-                  <ArrowRight className="w-[14px] h-[14px]" />
+                  <span>Fetch & Read</span>
+                  <ArrowRight className="w-[15px] h-[15px]" />
                 </button>
               </div>
             </div>
-            <div className="p-[12px] rounded-[10px] bg-[#F1F6F3] dark:bg-[#23252A] border border-[#DCE5E0] dark:border-[#373B43] text-[12px] text-[#42524A] dark:text-[#A2A6B2] leading-relaxed">
-              Extracts clean textual and tabular content from the URL. External ads, sidebars, and navigation elements are stripped to maintain pure source grounding.
-            </div>
+            <p className="text-[12px] text-[#8A8880] dark:text-[#9A9691] leading-relaxed">
+              Extracts the main body, headers, and tables while discarding promotional clutter to ensure pure citation fidelity.
+            </p>
           </form>
         )}
 
         {/* Tab 3: Paste Text */}
         {activeTab === 'paste' && (
-          <form onSubmit={handleTextSubmit} className="p-[20px] sm:p-[24px] space-y-[16px]">
+          <form onSubmit={handleTextSubmit} className="space-y-[14px] max-w-[720px] mx-auto py-[6px]">
             <div>
-              <label className="block text-[13px] font-semibold text-[#283830] dark:text-[#D0D4DE] mb-[6px]">
-                Document Label (Optional)
+              <label className="block text-[13px] font-serif font-semibold text-[#3A3A38] dark:text-[#E8E4DD] mb-[6px]">
+                Document Title (Optional)
               </label>
               <input
                 type="text"
-                placeholder="e.g. Clinical Trial Abstract, Technical RFC, Financial Statement..."
+                placeholder="e.g. NeurIPS Transformer Benchmark Draft"
                 value={pasteTitle}
                 onChange={(e) => setPasteTitle(e.target.value)}
                 disabled={isLoading}
-                className="w-full h-[42px] px-[12px] text-[13px] rounded-[10px] border border-[#CCD7D1] dark:border-[#424650] bg-white dark:bg-[#1E2024] text-[#18221D] dark:text-[#F5F6F8] placeholder-[#8A9992] dark:placeholder-[#727784] focus:outline-hidden focus:border-[#BA7A48]"
+                className="clay-well w-full h-[44px] px-[16px] text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] focus:outline-hidden focus:ring-2 focus:ring-[#D9924D] dark:focus:ring-[#E8863C]"
               />
             </div>
             <div>
-              <label className="block text-[13px] font-semibold text-[#283830] dark:text-[#D0D4DE] mb-[6px]">
-                Source Text
+              <label className="block text-[13px] font-serif font-semibold text-[#3A3A38] dark:text-[#E8E4DD] mb-[6px]">
+                Document Body
               </label>
               <textarea
-                rows={6}
-                placeholder="Paste raw text here..."
+                rows={5}
+                placeholder="Paste the dense document text or section excerpt here..."
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
                 disabled={isLoading}
-                className="w-full p-[12px] text-[13px] rounded-[10px] border border-[#CCD7D1] dark:border-[#424650] bg-white dark:bg-[#1E2024] text-[#18221D] dark:text-[#F5F6F8] placeholder-[#8A9992] dark:placeholder-[#727784] focus:outline-hidden focus:border-[#BA7A48] leading-relaxed resize-y font-mono"
+                className="clay-well w-full p-[16px] text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] focus:outline-hidden focus:ring-2 focus:ring-[#D9924D] dark:focus:ring-[#E8863C] leading-relaxed resize-y font-mono"
                 required
               />
-              <div className="flex justify-between items-center text-[12px] font-mono text-[#6C7A73] dark:text-[#8E93A0] mt-[6px]">
-                <span>
-                  {pasteText.trim().split(/\s+/).filter(Boolean).length} words
-                </span>
+              <div className="flex justify-between items-center text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] mt-[6px]">
+                <span>{pasteText.trim().split(/\s+/).filter(Boolean).length} words</span>
                 <span>Minimum 20 characters</span>
               </div>
             </div>
-            <div className="flex justify-end pt-[4px]">
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={isLoading || pasteText.trim().length < 20}
-                className="w-full sm:w-auto h-[46px] min-w-[120px] px-[20px] text-[13px] font-medium rounded-[10px] bg-[#BA7A48] hover:bg-[#A96D3C] text-white dark:bg-[#EDEDEB] dark:text-[#16181C] dark:hover:bg-white disabled:opacity-50 transition-all flex items-center justify-center gap-[8px] shadow-[0_4px_14px_rgba(186,122,72,0.3),inset_0_1px_1px_rgba(255,255,255,0.3)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.9)] cursor-pointer"
+                className="clay-btn-primary h-[46px] px-[24px] text-[13px] font-medium flex items-center justify-center gap-[8px] cursor-pointer disabled:opacity-50"
               >
-                <span>Analyze Text</span>
-                <ArrowRight className="w-[14px] h-[14px]" />
+                <span>Process Passage</span>
+                <ArrowRight className="w-[15px] h-[15px]" />
               </button>
             </div>
           </form>
         )}
 
-        {/* Error message display if any */}
+        {/* Error message alert */}
         {errorMessage && (
-          <div className="mx-[20px] sm:mx-[24px] mb-[20px] p-[12px] rounded-[10px] bg-[#FDF2F2] dark:bg-[#2B1515] border border-[#F5C6C6] dark:border-[#481E1E] flex items-start gap-[10px] text-[13px] text-[#A82828] dark:text-[#FCA5A5]">
+          <div className="mt-[20px] p-[14px] rounded-[18px] bg-[#F9E8E4] dark:bg-[#382020] border border-[#E8AEA2] dark:border-[#602E2E] flex items-start gap-[10px] text-[13px] text-[#B83E28] dark:text-[#FCA5A5]">
             <AlertCircle className="w-[16px] h-[16px] shrink-0 mt-[2px]" />
-            <div className="flex-1 leading-normal font-medium">
-              {errorMessage}
-            </div>
+            <div className="flex-1 font-medium leading-normal">{errorMessage}</div>
           </div>
         )}
       </div>
 
-      {/* Saved Reading Sessions & Stored Notes (if any exist) */}
+      {/* Previously Uploaded Document Library Grid */}
       {savedSessions.length > 0 && (
-        <div className="mt-[28px] space-y-[12px]">
-          <div className="flex items-center justify-between text-[13px] text-[#45544C] dark:text-[#9EA2AE]">
-            <span className="font-semibold flex items-center gap-[6px]">
-              <Bookmark className="w-[14px] h-[14px] text-[#BA7A48] dark:text-[#EDEDED]" />
-              <span>Continue Reading (Saved Documents & Stored Notes)</span>
-            </span>
+        <div className="space-y-[16px]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-[10px]">
+              <StatusBead status="synced" size="sm" />
+              <h2 className="font-serif font-bold text-[18px] text-[#F5FAF6] dark:text-[#E8E4DD]">
+                Document Library
+              </h2>
+              <span className="text-[11px] font-mono px-[8px] py-[2px] rounded-full bg-[#467E66] dark:bg-[#27292C] text-[#E2EFE5] dark:text-[#9A9691] border border-[#5E9B7E] dark:border-[#3E4249]">
+                {savedSessions.length} stored
+              </span>
+            </div>
             {onOpenLibrary && (
               <button
                 type="button"
                 onClick={onOpenLibrary}
-                className="text-[12px] font-mono text-[#BA7A48] dark:text-[#EDEDED] hover:underline cursor-pointer"
+                className="text-[12px] font-mono text-[#F7CF9D] dark:text-[#E8863C] hover:underline cursor-pointer flex items-center gap-[4px]"
               >
-                View all ({savedSessions.length}) →
+                <span>View library & notes</span>
+                <ArrowRight className="w-[12px] h-[12px]" />
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-[12px]">
-            {savedSessions.slice(0, 4).map((session) => (
-              <div
-                key={session.id}
-                className="p-[16px] rounded-[14px] border border-[#DCE3DF] dark:border-[#3C4049] bg-white dark:bg-[#2A2D33] hover:border-[#BA7A48] dark:hover:border-[#EDEDED] transition-all shadow-[0_4px_16px_rgba(40,60,50,0.05)] flex flex-col justify-between gap-[12px] group"
-              >
-                <div className="space-y-[6px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[16px]">
+            {savedSessions.slice(0, 6).map((session) => {
+              const totalSections = session.sectionCount || session.extractedDoc?.sections?.length || 1;
+              const visitedCount = session.visitedSectionIds?.length || 1;
+              const pctRead = Math.round((visitedCount / totalSections) * 100);
+
+              return (
+                <div
+                  key={session.id}
+                  className="clay-card clay-card-interactive p-[18px] flex flex-col justify-between gap-[16px] relative group"
+                >
+                  {/* Top-left status bead */}
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono uppercase font-semibold px-[6px] py-[2px] rounded-[4px] bg-[#EFF4F1] dark:bg-[#1E2024] text-[#34463C] dark:text-[#D2D5DD] border border-[#CCD7D1] dark:border-[#3C4049]">
+                    <StatusBead
+                      status={pctRead >= 100 ? "ready" : pctRead > 0 ? "reading" : "grounded"}
+                      label={pctRead >= 100 ? "Completed" : `${pctRead}% read`}
+                    />
+                    <span className="text-[10px] font-mono font-bold uppercase px-[8px] py-[2px] rounded-full clay-well text-[#3A3A38] dark:text-[#E8E4DD]">
                       {session.fileType}
-                    </span>
-                    <span className="text-[11px] font-mono text-[#BA7A48] dark:text-[#EDEDED] flex items-center gap-[3px]">
-                      <Bookmark className="w-[11px] h-[11px]" />
-                      {session.notes?.length || 0} notes stored
                     </span>
                   </div>
 
-                  <h4 className="font-serif font-semibold text-[14px] text-[#18221D] dark:text-[#F5F6F8] line-clamp-1">
-                    {session.title}
-                  </h4>
+                  {/* Document Cover Thumbnail with warm amber-to-rust treatment */}
+                  <div className="h-[90px] w-full rounded-[16px] cover-gradient-warm border border-[#C9D6C9] dark:border-white/5 p-[12px] flex items-center justify-between">
+                    <div className="space-y-[4px]">
+                      <div className="w-[28px] h-[28px] rounded-full bg-[#E3ECE3] dark:bg-[#35383D]/90 flex items-center justify-center text-[#D9924D] dark:text-[#E8863C] shadow-xs">
+                        <BookOpen className="w-[14px] h-[14px]" />
+                      </div>
+                      <p className="text-[10px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+                        {session.totalWords?.toLocaleString() || 0} words · {session.sectionCount} sections
+                      </p>
+                    </div>
 
-                  <p className="text-[11px] font-mono text-[#8E9E95] dark:text-[#7A808C] flex items-center gap-[4px]">
-                    <Clock className="w-[11px] h-[11px]" />
-                    {session.totalWords?.toLocaleString() || 0} words · {session.sectionCount} sections
-                  </p>
-                </div>
+                    {/* Donut progress ring */}
+                    <DonutRing progress={pctRead} size={48} strokeWidth={4} showLabel />
+                  </div>
 
-                <div className="pt-[10px] border-t border-[#EAEFEA] dark:border-[#373A42] flex items-center justify-between">
-                  <span className="text-[11px] font-mono text-[#8E9E95] dark:text-[#7A808C]">
-                    {new Date(session.lastOpened).toLocaleDateString()}
-                  </span>
+                  {/* Document Title & Metadata */}
+                  <div className="space-y-[6px]">
+                    <h3 className="font-serif font-bold text-[15px] text-[#3A3A38] dark:text-[#E8E4DD] line-clamp-2 leading-snug">
+                      {session.title}
+                    </h3>
+
+                    <div className="flex items-center justify-between text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+                      <span className="flex items-center gap-[4px]">
+                        <Bookmark className="w-[12px] h-[12px] text-[#7FA398]" />
+                        {session.notes?.length || 0} notes
+                      </span>
+                      <span>{new Date(session.lastOpened).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Open / Resume Button */}
                   {onOpenSession && (
                     <button
                       type="button"
                       onClick={() => onOpenSession(session)}
-                      className="text-[12px] font-medium text-[#BA7A48] dark:text-[#EDEDED] hover:underline flex items-center gap-[4px] cursor-pointer"
+                      className="clay-btn-neutral h-[38px] px-[14px] text-[12px] font-medium flex items-center justify-between w-full cursor-pointer group-hover:border-[#D9924D] dark:group-hover:border-[#E8863C] transition-colors"
                     >
-                      <span>Resume reading</span>
-                      <CornerDownRight className="w-[12px] h-[12px] group-hover:translate-x-0.5 transition-transform" />
+                      <span className="font-medium text-[#3A3A38] dark:text-[#E8E4DD]">
+                        Resume reading
+                      </span>
+                      <CornerDownRight className="w-[13px] h-[13px] text-[#D9924D] dark:text-[#E8863C] group-hover:translate-x-1 transition-transform" />
                     </button>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Preset Sample Documents: section gap of 28-32px */}
-      <div className="mt-[32px] space-y-[12px]">
-        <div className="flex items-center justify-between text-[13px] text-[#45544C] dark:text-[#9EA2AE]">
-          <span className="font-semibold flex items-center gap-[6px]">
-            <Sparkles className="w-[14px] h-[14px] text-[#BA7A48] dark:text-[#EDEDED]" />
-            <span>Instant Test Sources (Pre-loaded with exact metrics)</span>
+      {/* Preset Academic & Technical Sample Documents */}
+      <div className="space-y-[16px] pt-[8px]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-[8px]">
+            <StatusBead status="grounded" size="sm" />
+            <h2 className="font-serif font-bold text-[18px] text-[#F5FAF6] dark:text-[#E8E4DD]">
+              Instant Research Samples
+            </h2>
+            <span className="text-[11px] font-mono px-[8px] py-[2px] rounded-full bg-[#467E66] dark:bg-[#27292C] text-[#E2EFE5] dark:text-[#9A9691] border border-[#5E9B7E] dark:border-[#3E4249]">
+              Pre-loaded with exact metrics
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-[#D4E8DC] dark:text-[#9A9691]">
+            1-click exploration
           </span>
-          <span className="text-[12px] font-mono text-[#6C7A73] dark:text-[#8E93A0]">1-click analyze</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-[12px]">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-[16px]">
           {SAMPLE_DOCUMENTS.map((sample) => (
             <button
               key={sample.id}
               type="button"
               disabled={isLoading}
               onClick={() => onProcessSample(sample)}
-              className="text-left p-[16px] rounded-[14px] border border-[#DCE3DF] dark:border-[#3C4049] bg-white dark:bg-[#2A2D33] hover:border-[#BA7A48]/60 dark:hover:border-[#585D6A] hover:bg-[#FAFBF9] dark:hover:bg-[#31343B] transition-colors shadow-[0_4px_16px_rgba(40,60,50,0.05)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)] group cursor-pointer disabled:opacity-50 flex flex-col justify-between"
+              className="clay-card clay-card-interactive text-left p-[20px] flex flex-col justify-between gap-[16px] cursor-pointer disabled:opacity-50 relative group"
             >
-              <div>
-                <div className="flex items-center justify-between mb-[8px]">
-                  <span className="text-[11px] font-mono font-medium px-[7px] py-[2px] rounded-[6px] bg-[#E5ECE7] dark:bg-[#363A42] text-[#2C4236] dark:text-[#D0D4DF]">
-                    {sample.fileType.toUpperCase()}
+              <div className="space-y-[10px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono font-bold uppercase px-[8px] py-[2px] rounded-full clay-well text-[#3A3A38] dark:text-[#E8E4DD]">
+                    {sample.fileType}
                   </span>
-                  <span className="text-[11px] text-[#6A7B72] dark:text-[#8E93A0] font-medium">
+                  <span className="text-[11px] font-mono text-[#7FA398] font-medium">
                     {sample.category.split('&')[0]}
                   </span>
                 </div>
-                <h3 className="text-[13px] font-serif font-semibold text-[#18221D] dark:text-[#F5F6F8] line-clamp-2 mb-[6px] leading-snug">
+
+                <h3 className="text-[14px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD] line-clamp-2 leading-snug">
                   {sample.title}
                 </h3>
-                <p className="text-[12px] text-[#52635B] dark:text-[#A0A5B2] line-clamp-2 leading-relaxed">
+
+                <p className="text-[12px] text-[#8A8880] dark:text-[#9A9691] line-clamp-3 leading-relaxed">
                   {sample.description}
                 </p>
               </div>
 
-              <div className="mt-[12px] pt-[8px] border-t border-[#EAEFEA] dark:border-[#363A42] flex items-center justify-between text-[12px] font-medium text-[#BA7A48] dark:text-[#D4D8E2]">
-                <span>Load source</span>
-                <CornerDownRight className="w-[12px] h-[12px] group-hover:translate-x-0.5 transition-transform" />
+              <div className="pt-[10px] border-t border-[#C9D6C9] dark:border-[#464A52] flex items-center justify-between text-[12px] font-medium text-[#D9924D] dark:text-[#E8863C]">
+                <span>Read this paper</span>
+                <CornerDownRight className="w-[13px] h-[13px] group-hover:translate-x-1 transition-transform" />
               </div>
             </button>
           ))}

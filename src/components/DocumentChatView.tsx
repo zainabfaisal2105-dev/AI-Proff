@@ -18,7 +18,9 @@ import {
   BookOpen,
   Loader2,
   X,
+  MessageSquare,
 } from 'lucide-react';
+import { StatusBead } from './StatusBead';
 
 interface DocumentChatViewProps {
   sections: DocumentSection[];
@@ -74,105 +76,99 @@ export const DocumentChatView: React.FC<DocumentChatViewProps> = ({
     switch (level) {
       case 'directly_supported':
         return (
-          <div className="inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[6px] bg-[#E8F5E9] dark:bg-[#1C3322] text-[#2E7D32] dark:text-[#4ADE80] border border-[#C8E6C9] dark:border-[#2E5E3A] text-[11px] font-mono font-medium">
-            <ShieldCheck className="w-[13px] h-[13px]" />
-            <span>Directly Supported</span>
+          <div className="inline-flex items-center gap-[6px] px-[10px] py-[3px] rounded-full bg-[#7FA398]/20 dark:bg-[#7FA398]/30 text-[#436E62] dark:text-[#A7C8BE] border border-[#7FA398]/40 text-[11px] font-mono font-medium">
+            <ShieldCheck className="w-[13px] h-[13px] text-[#7FA398]" />
+            <span>Strictly Grounded in Text</span>
           </div>
         );
       case 'partially_supported':
         return (
-          <div className="inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[6px] bg-[#FFF8E1] dark:bg-[#332A15] text-[#B78103] dark:text-[#FBBF24] border border-[#FFE082] dark:border-[#574418] text-[11px] font-mono font-medium">
-            <AlertCircle className="w-[13px] h-[13px]" />
+          <div className="inline-flex items-center gap-[6px] px-[10px] py-[3px] rounded-full bg-[#D9924D]/15 dark:bg-[#E8863C]/20 text-[#B06B29] dark:text-[#F3A76C] border border-[#D9924D]/35 text-[11px] font-mono font-medium">
+            <AlertCircle className="w-[13px] h-[13px] text-[#D9924D] dark:text-[#E8863C]" />
             <span>Partially Supported</span>
           </div>
         );
       case 'not_supported':
         return (
-          <div className="inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[6px] bg-[#F1F5F9] dark:bg-[#20232A] text-[#64748B] dark:text-[#94A3B8] border border-[#E2E8F0] dark:border-[#334155] text-[11px] font-mono font-medium">
+          <div className="inline-flex items-center gap-[6px] px-[10px] py-[3px] rounded-full clay-well text-[#8A8880] dark:text-[#9A9691] text-[11px] font-mono font-medium">
             <HelpCircle className="w-[13px] h-[13px]" />
             <span>Not Supported in Document</span>
           </div>
         );
       case 'refused_out_of_scope':
         return (
-          <div className="inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[6px] bg-[#FFEBEE] dark:bg-[#33181C] text-[#C62828] dark:text-[#EF5350] border border-[#FFCDD2] dark:border-[#5E242B] text-[11px] font-mono font-medium">
+          <div className="inline-flex items-center gap-[6px] px-[10px] py-[3px] rounded-full bg-[#E57373]/15 dark:bg-[#E57373]/25 text-[#C62828] dark:text-[#EF9A9A] border border-[#E57373]/35 text-[11px] font-mono font-medium">
             <Ban className="w-[13px] h-[13px]" />
-            <span>Outside Document Scope</span>
+            <span>Refused: Beyond Source Scope</span>
           </div>
         );
     }
   };
 
   return (
-    <div className="bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#373A42] rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[650px] overflow-hidden">
-      {/* Top Header */}
-      <div className="px-[20px] py-[16px] border-b border-[#EAEFEA] dark:border-[#373A42] flex items-center justify-between bg-[#FAFBF9] dark:bg-[#23252A]">
+    <div className="clay-card p-[18px] sm:p-[22px] flex flex-col h-[680px] relative overflow-hidden">
+      {/* Top Header with Status Bead */}
+      <div className="flex items-center justify-between pb-[14px] border-b border-[#C9D6C9] dark:border-[#464A52] shrink-0">
         <div className="flex items-center gap-[10px]">
-          <div className="w-[32px] h-[32px] rounded-[8px] bg-[#EFF4F1] dark:bg-[#32363E] text-[#BA7A48] dark:text-[#EDEDED] flex items-center justify-center">
-            <BookOpen className="w-[16px] h-[16px]" />
-          </div>
+          <StatusBead status="grounded" size="sm" showPulse />
           <div>
-            <h3 className="font-serif font-bold text-[15px] text-[#18221D] dark:text-[#F5F6F8]">
-              Ask this Document
+            <h3 className="font-serif font-bold text-[15px] text-[#3A3A38] dark:text-[#E8E4DD]">
+              Grounded Document Q&A
             </h3>
-            <p className="text-[11px] font-mono text-[#6A7B72] dark:text-[#8E93A0] truncate max-w-[280px] sm:max-w-[420px]">
-              Strictly grounded in: {documentTitle}
+            <p className="text-[10px] font-mono text-[#8A8880] dark:text-[#9A9691] truncate max-w-[240px] sm:max-w-[320px]">
+              Grounded exclusively in: {documentTitle}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-[8px]">
-          {chatHistory.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearChat}
-              className="p-[8px] rounded-[8px] text-[#6A7B72] dark:text-[#8E93A0] hover:text-[#C62828] hover:bg-[#FFEBEE] dark:hover:bg-[#33181C] transition-colors cursor-pointer"
-              title="Clear conversation"
-            >
-              <Trash2 className="w-[15px] h-[15px]" />
-            </button>
-          )}
-        </div>
+        {chatHistory.length > 0 && (
+          <button
+            type="button"
+            onClick={onClearChat}
+            className="w-[32px] h-[32px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#C62828] dark:hover:text-[#EF5350] transition-colors cursor-pointer"
+            title="Clear chat"
+          >
+            <Trash2 className="w-[13px] h-[13px]" />
+          </button>
+        )}
       </div>
 
-      {/* Chat Messages Area */}
-      <div className="flex-1 overflow-y-auto p-[20px] space-y-[16px]">
+      {/* Messages List Area */}
+      <div className="flex-1 overflow-y-auto py-[16px] px-[4px] space-y-[16px]">
         {chatHistory.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-[440px] mx-auto space-y-[16px] text-[#6A7B72] dark:text-[#8E93A0]">
-            <div className="w-[44px] h-[44px] rounded-[12px] bg-[#EFF4F1] dark:bg-[#32363E] text-[#BA7A48] dark:text-[#EDEDED] flex items-center justify-center">
-              <Sparkles className="w-[20px] h-[20px]" />
+          <div className="h-full flex flex-col items-center justify-center text-center max-w-[380px] mx-auto space-y-[16px] text-[#8A8880] dark:text-[#9A9691]">
+            <div className="w-[50px] h-[50px] rounded-full bg-[#D6E0D6] dark:bg-[#3C4046] flex items-center justify-center text-[#D9924D] dark:text-[#E8863C] shadow-inner">
+              <Sparkles className="w-[22px] h-[22px]" />
             </div>
-            <div className="space-y-[6px]">
-              <h4 className="font-serif font-bold text-[16px] text-[#18221D] dark:text-[#F5F6F8]">
+
+            <div className="space-y-[4px]">
+              <h4 className="font-serif font-bold text-[16px] text-[#3A3A38] dark:text-[#E8E4DD]">
                 Ask questions about this paper
               </h4>
-              <p className="text-[13px] leading-relaxed">
-                The companion answers using <strong>only</strong> information in this document, refuses unrelated queries, and categorizes support levels.
+              <p className="text-[12px] leading-relaxed">
+                The reading companion answers using <strong>only</strong> information in this document, refuses outside speculation, and links directly to source citations.
               </p>
             </div>
 
-            {/* Starter Suggestion Chips */}
-            <div className="space-y-[8px] w-full pt-[8px]">
-              <p className="font-mono text-[11px] uppercase tracking-wider text-[#8E9E95] dark:text-[#7A808C]">
-                Suggested Questions
+            {/* Suggested Starter Questions */}
+            <div className="w-full pt-[6px] space-y-[6px]">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-[#8A8880] dark:text-[#9A9691]">
+                Suggested prompts
               </p>
-              <div className="flex flex-col gap-[6px]">
-                {[
-                  'What is the core methodology or architecture proposed?',
-                  'What quantitative findings or metrics are reported?',
-                  'What limitations or caveats do the authors acknowledge?',
-                  'Why did the authors choose their specific baseline?',
-                ].map((sug, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSuggestedClick(sug)}
-                    className="text-left px-[12px] py-[8px] rounded-[8px] bg-[#FAFBF9] dark:bg-[#25282E] border border-[#DCE3DF] dark:border-[#373A42] text-[12px] text-[#283830] dark:text-[#D5D8E0] hover:border-[#BA7A48] dark:hover:border-[#EDEDED] hover:text-[#BA7A48] dark:hover:text-[#FFFFFF] transition-all cursor-pointer truncate"
-                  >
-                    "{sug}"
-                  </button>
-                ))}
-              </div>
+              {[
+                'What is the core methodology or architecture proposed?',
+                'What quantitative findings or metrics are reported?',
+                'What limitations or caveats do the authors acknowledge?',
+              ].map((sug, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSuggestedClick(sug)}
+                  className="clay-well hover:border-[#D9924D] dark:hover:border-[#E8863C] w-full text-left p-[10px] rounded-[16px] text-[12px] text-[#3A3A38] dark:text-[#E8E4DD] transition-all cursor-pointer truncate"
+                >
+                  "{sug}"
+                </button>
+              ))}
             </div>
           </div>
         ) : (
@@ -183,42 +179,43 @@ export const DocumentChatView: React.FC<DocumentChatViewProps> = ({
                 key={msg.id}
                 className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-[6px]`}
               >
-                {/* Attached Passage Snippet (if user asked about a highlight) */}
+                {/* Attached excerpt snippet if user asked about specific highlighted text */}
                 {isUser && msg.attachedPassage && (
-                  <div className="max-w-[85%] px-[12px] py-[6px] rounded-[8px] bg-[#FAFBF9] dark:bg-[#202227] border border-[#DCE3DF] dark:border-[#373A42] text-[11px] text-[#5D6D65] dark:text-[#9EA2AE] flex items-start gap-[6px]">
-                    <Quote className="w-[12px] h-[12px] text-[#BA7A48] dark:text-[#EDEDED] shrink-0 mt-[2px]" />
+                  <div className="max-w-[85%] px-[12px] py-[6px] rounded-[14px] clay-well text-[11px] text-[#8A8880] dark:text-[#9A9691] flex items-start gap-[6px]">
+                    <Quote className="w-[12px] h-[12px] text-[#D9924D] dark:text-[#E8863C] shrink-0 mt-[1px]" />
                     <span className="line-clamp-2">
-                      Referencing: "{msg.attachedPassage.text}" ({msg.attachedPassage.sectionRef})
+                      Referencing: "{msg.attachedPassage.text}"
                     </span>
                   </div>
                 )}
 
+                {/* Clay Chat Bubble */}
                 <div
-                  className={`max-w-[88%] rounded-[14px] p-[14px] text-[13px] leading-relaxed ${
+                  className={`max-w-[90%] p-[14px] sm:p-[16px] text-[13px] leading-relaxed rounded-[20px] ${
                     isUser
-                      ? 'bg-[#BA7A48] text-white rounded-br-[4px]'
-                      : 'bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] text-[#18221D] dark:text-[#E2E5EC] rounded-bl-[4px] space-y-[10px]'
+                      ? 'clay-btn-primary text-white rounded-br-[6px]'
+                      : 'clay-card text-[#3A3A38] dark:text-[#E8E4DD] rounded-bl-[6px] space-y-[10px]'
                   }`}
                 >
                   {/* Status Badge for Assistant Responses */}
                   {!isUser && renderAnswerabilityBadge(msg.answerability)}
 
-                  {/* Message Content */}
                   <div className="whitespace-pre-wrap">{msg.content}</div>
 
-                  {/* Citation Reference Chip */}
+                  {/* Citation Pill: Rounded pill, secondary accent color (#7FA398), linking back to exact source passage */}
                   {!isUser && msg.citation && msg.citation.section !== 'None' && (
-                    <div className="pt-[8px] border-t border-[#EAEFEA] dark:border-[#373A42] flex items-center justify-between gap-[8px] text-[11px] font-mono">
-                      <span className="text-[#6A7B72] dark:text-[#8E93A0] truncate">
-                        Source: {msg.citation.pageOrLabel}
+                    <div className="pt-[8px] border-t border-[#C9D6C9] dark:border-[#464A52] flex items-center justify-between gap-[8px]">
+                      <span className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] truncate">
+                        Passage: {msg.citation.pageOrLabel}
                       </span>
                       {onJumpToSource && (
                         <button
                           type="button"
                           onClick={() => onJumpToSource(msg.citation?.section || '')}
-                          className="text-[#BA7A48] dark:text-[#EDEDED] hover:underline flex items-center gap-[3px] shrink-0 cursor-pointer"
+                          className="clay-btn-secondary h-[26px] px-[10px] text-[11px] font-medium flex items-center gap-[4px] rounded-full cursor-pointer shrink-0"
+                          title="Scroll to and highlight this exact passage in the reader"
                         >
-                          <span>View Passage</span>
+                          <span>Jump to source</span>
                           <ExternalLink className="w-[10px] h-[10px]" />
                         </button>
                       )}
@@ -231,35 +228,33 @@ export const DocumentChatView: React.FC<DocumentChatViewProps> = ({
         )}
 
         {isLoading && (
-          <div className="flex items-start gap-[8px] text-[#6A7B72] dark:text-[#8E93A0]">
-            <div className="p-[12px] rounded-[12px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] flex items-center gap-[8px] text-[12px] font-mono">
-              <Loader2 className="w-[14px] h-[14px] animate-spin text-[#BA7A48] dark:text-[#EDEDED]" />
-              <span>Checking document citations & formulating grounded response...</span>
-            </div>
+          <div className="clay-card p-[14px] flex items-center gap-[10px] text-[12px] font-mono text-[#D9924D] dark:text-[#E8863C] max-w-[85%] rounded-[18px]">
+            <Loader2 className="w-[15px] h-[15px] animate-spin shrink-0" />
+            <span>Checking document citations and formulating grounded response...</span>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Form & Attached Passage Indicator */}
-      <div className="p-[16px] border-t border-[#EAEFEA] dark:border-[#373A42] bg-[#FAFBF9] dark:bg-[#23252A] space-y-[8px]">
-        {/* Attached Passage preview banner */}
+      {/* Input Area */}
+      <div className="pt-[12px] border-t border-[#C9D6C9] dark:border-[#464A52] shrink-0 space-y-[8px]">
+        {/* Attached Passage Chip if selected from reader */}
         {attachedPassage && (
-          <div className="px-[12px] py-[6px] rounded-[8px] bg-white dark:bg-[#2A2D33] border border-[#BA7A48] dark:border-[#EDEDED] flex items-center justify-between text-[11px]">
-            <div className="flex items-center gap-[6px] text-[#283830] dark:text-[#D5D8E0] truncate">
-              <Quote className="w-[12px] h-[12px] text-[#BA7A48] dark:text-[#EDEDED] shrink-0" />
+          <div className="clay-well px-[12px] py-[6px] rounded-full flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-[6px] text-[#3A3A38] dark:text-[#E8E4DD] truncate">
+              <Quote className="w-[12px] h-[12px] text-[#D9924D] dark:text-[#E8863C] shrink-0" />
               <span className="truncate">
-                Asking about: "<strong>{attachedPassage.text.slice(0, 70)}...</strong>"
+                Asking about: "<strong>{attachedPassage.text.slice(0, 60)}...</strong>"
               </span>
             </div>
             {onClearAttachedPassage && (
               <button
                 type="button"
                 onClick={onClearAttachedPassage}
-                className="text-[#8E9E95] hover:text-[#C62828] cursor-pointer"
+                className="w-[18px] h-[18px] rounded-full hover:bg-black/10 flex items-center justify-center text-[#8A8880] cursor-pointer"
               >
-                <X className="w-[13px] h-[13px]" />
+                <X className="w-[11px] h-[11px]" />
               </button>
             )}
           </div>
@@ -270,14 +265,15 @@ export const DocumentChatView: React.FC<DocumentChatViewProps> = ({
             type="text"
             value={inputQuestion}
             onChange={(e) => setInputQuestion(e.target.value)}
-            placeholder="Ask anything about this document..."
+            placeholder="Ask question about document content..."
             disabled={isLoading}
-            className="flex-1 h-[42px] px-[14px] rounded-[10px] bg-white dark:bg-[#1E2024] border border-[#CCD7D1] dark:border-[#3C4049] text-[13px] text-[#18221D] dark:text-[#F5F6F8] placeholder-[#8E9E95] focus:outline-hidden focus:border-[#BA7A48] dark:focus:border-[#EDEDED] transition-colors"
+            className="clay-well flex-1 h-[44px] px-[16px] text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] focus:outline-hidden focus:ring-2 focus:ring-[#D9924D] dark:focus:ring-[#E8863C] rounded-full"
           />
           <button
             type="submit"
             disabled={!inputQuestion.trim() || isLoading}
-            className="h-[42px] px-[16px] rounded-[10px] bg-[#BA7A48] hover:bg-[#A96D3C] text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center shadow-xs cursor-pointer"
+            className="clay-btn-primary w-[44px] h-[44px] rounded-full flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-40"
+            title="Send question"
           >
             <Send className="w-[15px] h-[15px]" />
           </button>

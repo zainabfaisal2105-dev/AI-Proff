@@ -15,6 +15,7 @@ import { DocumentChatView } from './components/DocumentChatView';
 import { NotesAndHighlightsView } from './components/NotesAndHighlightsView';
 import { PassageActionModal } from './components/PassageActionModal';
 import { SavedSessionsModal } from './components/SavedSessionsModal';
+import { StatusBead } from './components/StatusBead';
 import {
   ExtractedDocument,
   SummaryResult,
@@ -665,7 +666,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-screen min-h-screen overflow-x-hidden bg-[#EEF2EF] dark:bg-[#222428] text-[#18221D] dark:text-[#F5F6F8] flex flex-col font-sans transition-colors duration-200 selection:bg-[#BA7A48] selection:text-white dark:selection:bg-[#EDEDED] dark:selection:text-[#16181C]">
+    <div className="w-screen min-h-screen overflow-x-hidden bg-[#5B9A7D] dark:bg-[#2A2C2F] text-[#F4F8F5] dark:text-[#E8E4DD] flex flex-col font-sans transition-colors duration-200 selection:bg-[#D9924D] selection:text-white dark:selection:bg-[#E8863C] dark:selection:text-white">
       {/* Top Navigation */}
       <Header
         darkMode={darkMode}
@@ -705,15 +706,15 @@ export default function App() {
         {stage === 'complete' && extractedDoc && summary && (
           <div className="space-y-[20px]">
             {/* Reading Companion Navigation Mode Bar */}
-            <div className="bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#373A42] rounded-[14px] p-[6px] shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex items-center justify-between gap-[8px] flex-wrap">
-              <div className="flex items-center gap-[4px] flex-wrap">
+            <div className="clay-card p-[6px] sm:p-[8px] flex items-center justify-between gap-[8px] flex-wrap relative">
+              <div className="clay-well p-[3px] rounded-full flex items-center gap-[3px] flex-wrap">
                 <button
                   type="button"
                   onClick={() => setReadingMode('overview')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'overview'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <Compass className="w-[14px] h-[14px]" />
@@ -723,42 +724,42 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setReadingMode('guided')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'guided'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <BookOpen className="w-[14px] h-[14px]" />
-                  <span>Guided Reading</span>
+                  <span>Guided</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setReadingMode('reader')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'reader'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <FileText className="w-[14px] h-[14px]" />
-                  <span>Document Text</span>
+                  <span>Reader</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setReadingMode('chat')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'chat'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <MessageSquareText className="w-[14px] h-[14px]" />
                   <span>Ask Paper</span>
                   {chatHistory.length > 0 && (
-                    <span className="w-[18px] h-[18px] rounded-full bg-[#18221D]/20 text-[10px] flex items-center justify-center font-mono">
+                    <span className="w-[18px] h-[18px] rounded-full bg-[#18221D]/20 text-[10px] flex items-center justify-center font-mono font-bold">
                       {chatHistory.filter((m) => m.sender === 'user').length}
                     </span>
                   )}
@@ -767,10 +768,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setReadingMode('summary')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'summary'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <ListFilter className="w-[14px] h-[14px]" />
@@ -780,10 +781,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setReadingMode('notes')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'notes'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <Bookmark className="w-[14px] h-[14px]" />
@@ -793,10 +794,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setReadingMode('verification')}
-                  className={`h-[36px] px-[12px] rounded-[8px] text-[13px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
+                  className={`h-[34px] px-[14px] rounded-full text-[12px] font-medium transition-all flex items-center gap-[6px] cursor-pointer ${
                     readingMode === 'verification'
-                      ? 'bg-[#BA7A48] text-white font-semibold shadow-xs'
-                      : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D] dark:hover:text-[#FFFFFF] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E]'
+                      ? 'clay-btn-primary shadow-xs'
+                      : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
                   }`}
                 >
                   <ShieldCheck className="w-[14px] h-[14px]" />
@@ -813,7 +814,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleReset}
-                className="h-[34px] px-[10px] rounded-[8px] text-[12px] text-[#6A7B72] dark:text-[#8E93A0] hover:text-[#18221D] dark:hover:text-white hover:bg-[#EFF4F1] dark:hover:bg-[#32363E] transition-colors flex items-center gap-[4px] cursor-pointer"
+                className="clay-btn-neutral h-[34px] px-[12px] text-[12px] flex items-center gap-[6px] cursor-pointer"
                 title="Open a different document"
               >
                 <RotateCcw className="w-[13px] h-[13px]" />
@@ -833,14 +834,14 @@ export default function App() {
                 />
 
                 {/* Quick Side-by-Side Launcher */}
-                <div className="p-[14px] rounded-[14px] bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#373A42] flex items-center justify-between text-[12px]">
-                  <span className="text-[#5D6D65] dark:text-[#9EA2AE]">
-                    Split View:
+                <div className="clay-card p-[16px] flex items-center justify-between text-[12px]">
+                  <span className="text-[#8A8880] dark:text-[#9A9691] font-medium">
+                    Dual Verification:
                   </span>
                   <button
                     type="button"
                     onClick={() => setIsSideBySideOpen(true)}
-                    className="font-mono text-[#BA7A48] dark:text-[#EDEDED] hover:underline font-semibold cursor-pointer"
+                    className="font-mono text-[#D9924D] dark:text-[#E8863C] hover:underline font-bold cursor-pointer"
                   >
                     Open Side-by-Side →
                   </button>
@@ -935,11 +936,14 @@ export default function App() {
                 {/* 7. Verification Audit Card */}
                 {readingMode === 'verification' && (
                   <div className="space-y-[20px]">
-                    <div className="bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#373A42] rounded-[16px] p-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-[8px]">
-                      <h2 className="font-serif font-bold text-[18px] text-[#18221D] dark:text-[#F5F6F8]">
-                        Independent Verification & Source Audit
-                      </h2>
-                      <p className="text-[13px] text-[#5D6D65] dark:text-[#9EA2AE] leading-relaxed">
+                    <div className="clay-card p-[20px] sm:p-[24px] space-y-[8px]">
+                      <div className="flex items-center gap-[8px]">
+                        <StatusBead status="grounded" size="sm" showPulse />
+                        <h2 className="font-serif font-bold text-[18px] text-[#3A3A38] dark:text-[#E8E4DD]">
+                          Independent Verification & Source Audit
+                        </h2>
+                      </div>
+                      <p className="text-[13px] text-[#8A8880] dark:text-[#9A9691] leading-relaxed">
                         Every sentence, claim, and metric is audited against original source text to prevent extrapolation, hallucination, or numerical distortion.
                       </p>
                     </div>
@@ -1007,7 +1011,7 @@ export default function App() {
       />
 
       {/* Minimal Academic Footer */}
-      <footer className="border-t border-[#DCE3DF] dark:border-[#33363E] py-[18px] text-center text-[12px] text-[#6C7A73] dark:text-[#868B96] bg-[#E8ECE8] dark:bg-[#1E2024] transition-colors">
+      <footer className="border-t border-[#488269] dark:border-[#3E4249] py-[18px] text-center text-[12px] text-[#DCEAE0] dark:text-[#9A9691] bg-[#4E886D] dark:bg-[#232528] transition-colors">
         <div className="w-full max-w-[1200px] mx-auto px-[16px] md:px-[28px] lg:px-[40px] flex flex-col sm:flex-row items-center justify-between gap-[12px]">
           <span className="font-mono text-[11px]">
             AI Research Reading Companion · Strictly Grounded in Source Documents
@@ -1015,7 +1019,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsGroundingModalOpen(true)}
-            className="hover:underline hover:text-[#18221D] dark:hover:text-[#FFFFFF] text-[11px] font-mono transition-colors cursor-pointer"
+            className="hover:underline hover:text-white dark:hover:text-[#E8E4DD] text-[11px] font-mono transition-colors cursor-pointer"
           >
             Verification Standards & Rules
           </button>

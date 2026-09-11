@@ -8,11 +8,11 @@ import {
   Download,
   Quote,
   FileText,
-  Calendar,
-  Check,
-  X,
   ExternalLink,
+  X,
+  Sparkles,
 } from 'lucide-react';
+import { StatusBead } from './StatusBead';
 
 interface NotesAndHighlightsViewProps {
   documentTitle: string;
@@ -101,37 +101,31 @@ export const NotesAndHighlightsView: React.FC<NotesAndHighlightsViewProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#373A42] rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.04)] overflow-hidden space-y-[20px] p-[20px] sm:p-[28px]">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[16px] pb-[20px] border-b border-[#EAEFEA] dark:border-[#373A42]">
+    <div className="clay-card p-[20px] sm:p-[28px] space-y-[20px] relative">
+      {/* Top Header with Status Bead */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[16px] pb-[18px] border-b border-[#C9D6C9] dark:border-[#464A52]">
         <div className="space-y-[4px]">
           <div className="flex items-center gap-[8px]">
-            <span className="font-mono text-[11px] px-[8px] py-[2px] rounded-[6px] bg-[#EFF4F1] dark:bg-[#32363E] text-[#34463C] dark:text-[#D2D5DD] border border-[#D4DFD9] dark:border-[#424650] font-semibold">
-              Research Notebook
-            </span>
-            <span className="font-mono text-[11px] text-[#6A7B72] dark:text-[#8E93A0]">
-              {notes.length} Notes · {highlights.length} Highlights
+            <StatusBead status="synced" size="sm" showPulse />
+            <span className="font-serif font-bold text-[18px] text-[#3A3A38] dark:text-[#E8E4DD]">
+              Research Notebook & Annotations
             </span>
           </div>
-          <h2 className="font-serif font-bold text-[20px] text-[#18221D] dark:text-[#F5F6F8]">
-            Notes & Highlighted Passages
-          </h2>
-          <p className="text-[11px] font-mono text-[#2E7D32] dark:text-[#4ADE80] flex items-center gap-[5px]">
-            <span className="w-[5px] h-[5px] rounded-full bg-[#2E7D32] dark:bg-[#4ADE80]" />
-            <span>Persisted automatically — available whenever you return to this document</span>
+          <p className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+            {notes.length} stored notes · {highlights.length} passages highlighted
           </p>
         </div>
 
-        {/* Tab switcher & export */}
+        {/* Tab switcher & action buttons */}
         <div className="flex items-center gap-[10px] flex-wrap">
-          <div className="flex items-center p-[3px] rounded-[10px] bg-[#EFF4F1] dark:bg-[#222428] border border-[#DCE3DF] dark:border-[#373A42]">
+          <div className="clay-well p-[3px] rounded-full inline-flex items-center">
             <button
               type="button"
               onClick={() => setActiveTab('notes')}
-              className={`px-[12px] py-[6px] rounded-[7px] text-[12px] font-medium transition-all cursor-pointer ${
+              className={`h-[32px] px-[14px] rounded-full text-[12px] font-medium transition-all cursor-pointer ${
                 activeTab === 'notes'
-                  ? 'bg-white dark:bg-[#2A2D33] text-[#18221D] dark:text-[#F5F6F8] shadow-xs font-semibold'
-                  : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D]'
+                  ? 'clay-btn-primary shadow-xs'
+                  : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
               }`}
             >
               Notes ({notes.length})
@@ -139,10 +133,10 @@ export const NotesAndHighlightsView: React.FC<NotesAndHighlightsViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('highlights')}
-              className={`px-[12px] py-[6px] rounded-[7px] text-[12px] font-medium transition-all cursor-pointer ${
+              className={`h-[32px] px-[14px] rounded-full text-[12px] font-medium transition-all cursor-pointer ${
                 activeTab === 'highlights'
-                  ? 'bg-white dark:bg-[#2A2D33] text-[#18221D] dark:text-[#F5F6F8] shadow-xs font-semibold'
-                  : 'text-[#5D6D65] dark:text-[#9EA2AE] hover:text-[#18221D]'
+                  ? 'clay-btn-primary shadow-xs'
+                  : 'text-[#8A8880] dark:text-[#9A9691] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD]'
               }`}
             >
               Highlights ({highlights.length})
@@ -153,17 +147,17 @@ export const NotesAndHighlightsView: React.FC<NotesAndHighlightsViewProps> = ({
             <button
               type="button"
               onClick={exportNotesAsMarkdown}
-              className="h-[36px] px-[12px] rounded-[8px] border border-[#CCD7D1] dark:border-[#3C4049] bg-white dark:bg-[#25282E] text-[#283830] dark:text-[#D5D8E0] hover:bg-[#EFF4F1] dark:hover:bg-[#32363E] text-[12px] font-medium transition-colors flex items-center gap-[6px] cursor-pointer"
+              className="clay-btn-neutral h-[36px] px-[12px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer"
             >
-              <Download className="w-[13px] h-[13px] text-[#BA7A48] dark:text-[#EDEDED]" />
-              <span>Export to Markdown</span>
+              <Download className="w-[13px] h-[13px] text-[#7FA398]" />
+              <span>Export</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={() => setIsAddingNote(!isAddingNote)}
-            className="h-[36px] px-[12px] rounded-[8px] bg-[#BA7A48] hover:bg-[#A96D3C] text-white text-[12px] font-medium transition-colors flex items-center gap-[6px] shadow-xs cursor-pointer"
+            className="clay-btn-primary h-[36px] px-[14px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer"
           >
             <Plus className="w-[14px] h-[14px]" />
             <span>New Note</span>
@@ -175,29 +169,29 @@ export const NotesAndHighlightsView: React.FC<NotesAndHighlightsViewProps> = ({
       {isAddingNote && (
         <form
           onSubmit={handleCreateNote}
-          className="p-[18px] rounded-[12px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#BA7A48]/30 dark:border-[#EDEDED]/20 space-y-[12px] animate-in fade-in duration-150"
+          className="clay-card p-[18px] border-2 border-[#D9924D] dark:border-[#E8863C] space-y-[12px] animate-in fade-in duration-150"
         >
           <div className="flex items-center justify-between">
-            <h4 className="text-[13px] font-serif font-bold text-[#18221D] dark:text-[#F5F6F8]">
-              Create New Personal Note
+            <h4 className="text-[13px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD]">
+              Attach Personal Note
             </h4>
             <button
               type="button"
               onClick={() => setIsAddingNote(false)}
-              className="text-[#8E9E95] hover:text-[#C62828] cursor-pointer"
+              className="w-[24px] h-[24px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#C62828] cursor-pointer"
             >
-              <X className="w-[14px] h-[14px]" />
+              <X className="w-[12px] h-[12px]" />
             </button>
           </div>
 
           <div className="flex items-center gap-[8px]">
-            <span className="text-[11px] font-mono text-[#6A7B72] dark:text-[#8E93A0]">
+            <span className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691]">
               Attach to Section:
             </span>
             <select
               value={newNoteSection}
               onChange={(e) => setNewNoteSection(e.target.value)}
-              className="h-[32px] px-[8px] rounded-[6px] bg-white dark:bg-[#1E2024] border border-[#CCD7D1] dark:border-[#3C4049] text-[12px] text-[#18221D] dark:text-[#F5F6F8] focus:outline-hidden"
+              className="clay-well h-[32px] px-[10px] text-[12px] rounded-full text-[#3A3A38] dark:text-[#E8E4DD] focus:outline-hidden"
             >
               {sections.map((s) => (
                 <option key={s.id} value={s.label}>
@@ -210,23 +204,23 @@ export const NotesAndHighlightsView: React.FC<NotesAndHighlightsViewProps> = ({
           <textarea
             value={newNoteContent}
             onChange={(e) => setNewNoteContent(e.target.value)}
-            placeholder="Write your research observations, questions, or notes..."
+            placeholder="Record technical insights, hypotheses, or questions..."
             rows={3}
-            className="w-full p-[12px] rounded-[8px] bg-white dark:bg-[#1E2024] border border-[#CCD7D1] dark:border-[#3C4049] text-[13px] text-[#18221D] dark:text-[#F5F6F8] placeholder-[#8E9E95] focus:outline-hidden focus:border-[#BA7A48]"
+            className="clay-well w-full p-[12px] text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] focus:outline-hidden focus:ring-2 focus:ring-[#D9924D] dark:focus:ring-[#E8863C] rounded-[16px]"
           />
 
           <div className="flex justify-end gap-[8px]">
             <button
               type="button"
               onClick={() => setIsAddingNote(false)}
-              className="px-[12px] py-[6px] rounded-[6px] text-[12px] text-[#6A7B72] hover:bg-[#EFF4F1] cursor-pointer"
+              className="clay-btn-neutral h-[34px] px-[14px] text-[12px] cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!newNoteContent.trim()}
-              className="px-[14px] py-[6px] rounded-[6px] bg-[#BA7A48] text-white text-[12px] font-medium hover:bg-[#A96D3C] disabled:opacity-40 cursor-pointer"
+              className="clay-btn-primary h-[34px] px-[16px] text-[12px] font-medium cursor-pointer disabled:opacity-40"
             >
               Save Note
             </button>
@@ -234,149 +228,172 @@ export const NotesAndHighlightsView: React.FC<NotesAndHighlightsViewProps> = ({
         </form>
       )}
 
-      {/* Tab Content: Personal Notes */}
+      {/* Tab 1: Sticky Notes Grid */}
       {activeTab === 'notes' && (
-        <div className="space-y-[12px]">
+        <div className="space-y-[14px]">
           {notes.length === 0 ? (
-            <div className="p-[32px] text-center rounded-[12px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] space-y-[8px]">
-              <Bookmark className="w-[24px] h-[24px] text-[#BA7A48] dark:text-[#EDEDED] mx-auto opacity-70" />
-              <p className="text-[13px] font-serif text-[#18221D] dark:text-[#F5F6F8]">
-                No notes created yet.
+            <div className="clay-well p-[32px] text-center space-y-[8px] rounded-[20px]">
+              <Bookmark className="w-[28px] h-[28px] text-[#D9924D] dark:text-[#E8863C] mx-auto opacity-70" />
+              <p className="text-[14px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD]">
+                No stored notes yet.
               </p>
-              <p className="text-[12px] text-[#6A7B72] dark:text-[#8E93A0]">
-                Take notes while reading or highlight text in the Reader to attach personal thoughts.
+              <p className="text-[12px] text-[#8A8880] dark:text-[#9A9691] max-w-[40ch] mx-auto">
+                Highlight any passage in the Reader and click "Note" to record thoughts attached to specific citations.
               </p>
             </div>
           ) : (
-            notes.map((note) => (
-              <div
-                key={note.id}
-                className="p-[16px] rounded-[12px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] space-y-[10px]"
-              >
-                <div className="flex items-center justify-between text-[11px] font-mono">
-                  <button
-                    type="button"
-                    onClick={() => onJumpToSection(note.sectionLabel)}
-                    className="text-[#BA7A48] dark:text-[#EDEDED] hover:underline flex items-center gap-[4px] font-semibold cursor-pointer"
-                  >
-                    <span>{note.sectionLabel}</span>
-                    <ExternalLink className="w-[10px] h-[10px]" />
-                  </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px]">
+              {notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="clay-sticky-note p-[18px] flex flex-col justify-between gap-[12px] relative"
+                >
+                  <div className="space-y-[8px]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-[6px]">
+                        <StatusBead status="synced" size="sm" />
+                        <button
+                          type="button"
+                          onClick={() => onJumpToSection(note.sectionLabel)}
+                          className="text-[11px] font-mono text-[#D9924D] dark:text-[#E8863C] hover:underline flex items-center gap-[4px] font-bold cursor-pointer"
+                        >
+                          <span>{note.sectionLabel}</span>
+                          <ExternalLink className="w-[10px] h-[10px]" />
+                        </button>
+                      </div>
 
-                  <div className="flex items-center gap-[10px] text-[#8E9E95]">
+                      <div className="flex items-center gap-[6px]">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(note)}
+                          className="w-[26px] h-[26px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#3A3A38] cursor-pointer"
+                          title="Edit note"
+                        >
+                          <Edit3 className="w-[11px] h-[11px]" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteNote(note.id)}
+                          className="w-[26px] h-[26px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#C62828] cursor-pointer"
+                          title="Delete note"
+                        >
+                          <Trash2 className="w-[11px] h-[11px]" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Attached passage quote if present */}
+                    {note.targetText && (
+                      <div className="text-[11px] font-mono italic text-[#8A8880] dark:text-[#9A9691] border-l-2 border-[#7FA398] pl-[8px] line-clamp-2">
+                        "{note.targetText}"
+                      </div>
+                    )}
+
+                    {/* Note Content */}
+                    {editingNoteId === note.id ? (
+                      <div className="space-y-[8px]">
+                        <textarea
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                          rows={3}
+                          className="clay-well w-full p-[8px] text-[12px] text-[#3A3A38] dark:text-[#E8E4DD] rounded-[10px]"
+                        />
+                        <div className="flex justify-end gap-[6px]">
+                          <button
+                            type="button"
+                            onClick={() => setEditingNoteId(null)}
+                            className="clay-btn-neutral h-[26px] px-[8px] text-[10px] cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEdit(note.id)}
+                            className="clay-btn-primary h-[26px] px-[10px] text-[10px] cursor-pointer"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] leading-relaxed whitespace-pre-wrap">
+                        {note.noteContent}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#8A8880] dark:text-[#9A9691] pt-[6px] border-t border-[#C9D6C9]/60 dark:border-[#464A52]/60">
                     <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleStartEdit(note)}
-                      className="hover:text-[#18221D] dark:hover:text-white cursor-pointer"
-                      title="Edit note"
-                    >
-                      <Edit3 className="w-[13px] h-[13px]" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteNote(note.id)}
-                      className="hover:text-[#C62828] cursor-pointer"
-                      title="Delete note"
-                    >
-                      <Trash2 className="w-[13px] h-[13px]" />
-                    </button>
+                    <span className="flex items-center gap-[4px] text-[#7FA398]">
+                      <Bookmark className="w-[10px] h-[10px]" />
+                      <span>Note attached</span>
+                    </span>
                   </div>
                 </div>
-
-                {/* Attached passage citation quote */}
-                {note.targetText && (
-                  <div className="px-[12px] py-[6px] rounded-[6px] bg-white dark:bg-[#1E2024] border-l-2 border-[#BA7A48] dark:border-[#EDEDED] text-[12px] italic text-[#5D6D65] dark:text-[#9EA2AE]">
-                    "{note.targetText}"
-                  </div>
-                )}
-
-                {/* Note Content */}
-                {editingNoteId === note.id ? (
-                  <div className="space-y-[8px]">
-                    <textarea
-                      value={editingContent}
-                      onChange={(e) => setEditingContent(e.target.value)}
-                      rows={3}
-                      className="w-full p-[10px] rounded-[6px] bg-white dark:bg-[#1E2024] border border-[#BA7A48] text-[13px] text-[#18221D] dark:text-white focus:outline-hidden"
-                    />
-                    <div className="flex justify-end gap-[6px]">
-                      <button
-                        type="button"
-                        onClick={() => setEditingNoteId(null)}
-                        className="px-[10px] py-[4px] rounded-[4px] text-[11px] text-[#6A7B72] hover:bg-[#EFF4F1] cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveEdit(note.id)}
-                        className="px-[12px] py-[4px] rounded-[4px] bg-[#BA7A48] text-white text-[11px] font-medium hover:bg-[#A96D3C] cursor-pointer"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-[#283830] dark:text-[#D5D8E0] leading-relaxed whitespace-pre-wrap">
-                    {note.noteContent}
-                  </p>
-                )}
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      {/* Tab Content: Saved Highlights */}
+      {/* Tab 2: Saved Highlights */}
       {activeTab === 'highlights' && (
         <div className="space-y-[12px]">
           {highlights.length === 0 ? (
-            <div className="p-[32px] text-center rounded-[12px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] space-y-[8px]">
-              <Quote className="w-[24px] h-[24px] text-[#BA7A48] dark:text-[#EDEDED] mx-auto opacity-70" />
-              <p className="text-[13px] font-serif text-[#18221D] dark:text-[#F5F6F8]">
+            <div className="clay-well p-[32px] text-center space-y-[8px] rounded-[20px]">
+              <Quote className="w-[28px] h-[28px] text-[#7FA398] mx-auto opacity-70" />
+              <p className="text-[14px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD]">
                 No highlighted passages yet.
               </p>
-              <p className="text-[12px] text-[#6A7B72] dark:text-[#8E93A0]">
-                Select text in the Reader tab and choose 'Note' or 'Explain' to save passages.
+              <p className="text-[12px] text-[#8A8880] dark:text-[#9A9691]">
+                Select text in the Reader tab to create highlights with translucent washes.
               </p>
             </div>
           ) : (
             highlights.map((h) => (
               <div
                 key={h.id}
-                className="p-[16px] rounded-[12px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] space-y-[8px]"
+                className="clay-card p-[16px] space-y-[10px] relative"
               >
                 <div className="flex items-center justify-between text-[11px] font-mono">
-                  <button
-                    type="button"
-                    onClick={() => onJumpToSection(h.sectionLabel)}
-                    className="text-[#BA7A48] dark:text-[#EDEDED] hover:underline flex items-center gap-[4px] font-semibold cursor-pointer"
-                  >
-                    <span>{h.sectionLabel}</span>
-                    <ExternalLink className="w-[10px] h-[10px]" />
-                  </button>
+                  <div className="flex items-center gap-[6px]">
+                    <StatusBead status="grounded" size="sm" />
+                    <button
+                      type="button"
+                      onClick={() => onJumpToSection(h.sectionLabel)}
+                      className="text-[#D9924D] dark:text-[#E8863C] hover:underline flex items-center gap-[4px] font-bold cursor-pointer"
+                    >
+                      <span>{h.sectionLabel}</span>
+                      <ExternalLink className="w-[10px] h-[10px]" />
+                    </button>
+                  </div>
 
-                  <div className="flex items-center gap-[8px] text-[#8E9E95]">
-                    <span>{new Date(h.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-[8px]">
+                    <span className="text-[#8A8880] dark:text-[#9A9691]">
+                      {new Date(h.createdAt).toLocaleDateString()}
+                    </span>
                     <button
                       type="button"
                       onClick={() => onDeleteHighlight(h.id)}
-                      className="hover:text-[#C62828] cursor-pointer"
+                      className="w-[24px] h-[24px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#C62828] cursor-pointer"
+                      title="Delete highlight"
                     >
-                      <Trash2 className="w-[13px] h-[13px]" />
+                      <Trash2 className="w-[11px] h-[11px]" />
                     </button>
                   </div>
                 </div>
 
-                <div className="p-[12px] rounded-[8px] bg-white dark:bg-[#1E2024] border-l-3 border-[#BA7A48] text-[13px] font-serif italic text-[#18221D] dark:text-[#E2E5EC] leading-relaxed">
-                  "{h.text}"
+                {/* Translucent wash text highlight */}
+                <div className="text-[14px] font-serif leading-relaxed text-[#3A3A38] dark:text-[#E8E4DD]">
+                  <span className="passage-highlight-light">
+                    "{h.text}"
+                  </span>
                 </div>
 
                 {h.note && (
-                  <p className="text-[12px] text-[#5D6D65] dark:text-[#9EA2AE] pl-[12px]">
-                    Note: {h.note}
-                  </p>
+                  <div className="text-[12px] text-[#8A8880] dark:text-[#9A9691] pt-[4px]">
+                    <strong>Note:</strong> {h.note}
+                  </div>
                 )}
               </div>
             ))

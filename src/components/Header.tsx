@@ -1,5 +1,7 @@
 import React from 'react';
-import { FileText, Sun, Moon, ShieldCheck, Sparkles, BookOpen, Layers, Bookmark } from 'lucide-react';
+import { BookOpen, Layers, Bookmark, ShieldCheck, Sparkles } from 'lucide-react';
+import { RotaryThemeDial } from './RotaryThemeDial';
+import { StatusBead } from './StatusBead';
 
 interface HeaderProps {
   darkMode: boolean;
@@ -23,34 +25,46 @@ export const Header: React.FC<HeaderProps> = ({
   savedSessionsCount = 0,
 }) => {
   return (
-    <header className="sticky top-0 z-40 w-full h-[64px] min-h-[64px] max-h-[64px] border-b border-[#DCE3DF] dark:border-[#33363E] bg-[#F7FAF8]/95 dark:bg-[#202226]/95 backdrop-blur-md transition-colors duration-200">
-      <div className="max-w-[1200px] w-full mx-auto px-[16px] sm:px-[28px] lg:px-[40px] h-[64px] flex items-center justify-between gap-[20px]">
-        {/* Left: Brand / Title */}
+    <header className="sticky top-0 z-40 w-full pt-[12px] pb-[8px] px-[16px] sm:px-[28px] lg:px-[40px] pointer-events-none">
+      <div className="max-w-[1200px] w-full mx-auto clay-card bg-[#E3ECE3] dark:bg-[#35383D] p-[10px] sm:p-[12px] flex items-center justify-between gap-[16px] pointer-events-auto transition-all">
+        {/* Left: Brand Identity with Status Bead */}
         <div className="flex items-center gap-[12px] shrink-0">
-          <div className="w-[32px] h-[32px] rounded-[10px] bg-[#1E2723] dark:bg-[#EDEDED] text-[#FAFBF9] dark:text-[#16181C] flex items-center justify-center font-medium shadow-xs">
-            <FileText className="w-[16px] h-[16px]" />
-          </div>
-          <div className="flex items-center gap-[8px]">
-            <span id="brand-title" className="font-serif font-semibold text-[18px] sm:text-[19px] tracking-tight text-[#18221D] dark:text-[#F5F6F8]">
-              AI-Proff
+          <div className="relative">
+            <div className="w-[38px] h-[38px] rounded-[14px] bg-[#D9924D] dark:bg-[#E8863C] text-white flex items-center justify-center font-bold shadow-[0_4px_12px_rgba(217,146,77,0.35)] dark:shadow-[0_4px_14px_rgba(232,134,60,0.4)]">
+              <BookOpen className="w-[18px] h-[18px]" />
+            </div>
+            {/* Live status bead on brand tile */}
+            <span className="absolute -top-[2px] -right-[2px]">
+              <StatusBead status={hasDocument ? "reading" : "ready"} size="sm" showPulse={hasDocument} />
             </span>
-            <span className="hidden sm:inline-flex items-center gap-[6px] text-[11px] font-mono px-[8px] py-[2px] rounded-[6px] bg-[#EFF4F1] dark:bg-[#282B32] text-[#34463C] dark:text-[#D2D5DD] border border-[#D4DFD9] dark:border-[#3E424C]">
-              <span className="w-[6px] h-[6px] rounded-full bg-[#2E7D32] dark:bg-[#4ADE80] inline-block shadow-[0_0_6px_rgba(46,125,50,0.4)]" />
-              Reading Companion
+          </div>
+
+          <div className="flex flex-col">
+            <div className="flex items-center gap-[8px]">
+              <span id="brand-title" className="font-serif font-bold text-[18px] sm:text-[20px] tracking-tight text-[#3A3A38] dark:text-[#E8E4DD]">
+                AI-Proff
+              </span>
+              <span className="hidden sm:inline-flex items-center gap-[5px] text-[10px] font-mono px-[8px] py-[2px] rounded-full bg-[#D6E0D6] dark:bg-[#27292C] text-[#3A3A38] dark:text-[#E8E4DD] border border-[#C9D6C9] dark:border-[#464A52]">
+                <span className="w-[5px] h-[5px] rounded-full bg-[#7FA398]" />
+                Reading Partner
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-[#8A8880] dark:text-[#9A9691] -mt-[1px] hidden xs:block">
+              {hasDocument ? "Active Grounded Session" : "Strict Source Grounding"}
             </span>
           </div>
         </div>
 
-        {/* Center / Navigation Actions (if document loaded, max 1-2 controls) */}
+        {/* Center: Reading Quick Actions (when document active) */}
         {hasDocument && (
           <div className="hidden md:flex items-center gap-[8px]">
             {onOpenSideBySide && (
               <button
                 type="button"
                 onClick={onOpenSideBySide}
-                className="h-[36px] px-[12px] text-[13px] font-medium rounded-[8px] text-[#404F48] dark:text-[#A8ACB8] hover:text-[#18221D] dark:hover:text-[#F5F6F8] hover:bg-[#E3ECE7] dark:hover:bg-[#2B2E35] transition-colors flex items-center gap-[6px] border border-transparent hover:border-[#CFDBD4] dark:hover:border-[#3B3F48]"
+                className="clay-btn-neutral h-[36px] px-[14px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer"
               >
-                <Layers className="w-[14px] h-[14px]" />
+                <Layers className="w-[13px] h-[13px] text-[#7FA398]" />
                 <span>Side-by-Side</span>
               </button>
             )}
@@ -58,28 +72,28 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenSource}
-                className="h-[36px] px-[12px] text-[13px] font-medium rounded-[8px] text-[#404F48] dark:text-[#A8ACB8] hover:text-[#18221D] dark:hover:text-[#F5F6F8] hover:bg-[#E3ECE7] dark:hover:bg-[#2B2E35] transition-colors flex items-center gap-[6px] border border-transparent hover:border-[#CFDBD4] dark:hover:border-[#3B3F48]"
+                className="clay-btn-neutral h-[36px] px-[14px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer"
               >
-                <BookOpen className="w-[14px] h-[14px]" />
-                <span>Source Chunks</span>
+                <BookOpen className="w-[13px] h-[13px] text-[#D9924D] dark:text-[#E8863C]" />
+                <span>Source Text</span>
               </button>
             )}
           </div>
         )}
 
-        {/* Right: Controls (Theme Toggle & Info) */}
-        <div className="flex items-center gap-[10px] shrink-0">
+        {/* Right: Library, Audit Rules, and Tactile Rotary Theme Dial */}
+        <div className="flex items-center gap-[10px] sm:gap-[14px] shrink-0">
           {onOpenLibrary && (
             <button
               type="button"
               onClick={onOpenLibrary}
-              className="flex items-center gap-[6px] text-[13px] font-medium text-[#4D5C55] dark:text-[#9A9EA9] hover:text-[#18221D] dark:hover:text-[#FFFFFF] h-[40px] px-[12px] rounded-[8px] hover:bg-[#E3ECE7] dark:hover:bg-[#2B2E35] transition-colors cursor-pointer"
-              title="View saved documents & stored notes"
+              className="clay-btn-neutral h-[40px] px-[14px] text-[12px] font-medium flex items-center gap-[7px] cursor-pointer"
+              title="Open Reading Library & Saved Notes"
             >
-              <Bookmark className="w-[15px] h-[15px] text-[#BA7A48] dark:text-[#EDEDED]" />
-              <span className="hidden sm:inline">Library & Notes</span>
+              <Bookmark className="w-[14px] h-[14px] text-[#D9924D] dark:text-[#E8863C]" />
+              <span className="hidden sm:inline">Library</span>
               {savedSessionsCount > 0 && (
-                <span className="w-[18px] h-[18px] rounded-full bg-[#BA7A48]/15 dark:bg-[#EDEDED]/20 text-[#BA7A48] dark:text-[#EDEDED] text-[11px] font-mono font-semibold flex items-center justify-center">
+                <span className="w-[18px] h-[18px] rounded-full bg-[#D9924D]/20 dark:bg-[#E8863C]/25 text-[#D9924D] dark:text-[#E8863C] text-[10px] font-mono font-bold flex items-center justify-center">
                   {savedSessionsCount}
                 </span>
               )}
@@ -89,33 +103,17 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenGroundingInfo}
-            className="hidden sm:flex items-center gap-[6px] text-[13px] font-medium text-[#4D5C55] dark:text-[#9A9EA9] hover:text-[#18221D] dark:hover:text-[#FFFFFF] h-[40px] px-[12px] rounded-[8px] hover:bg-[#E3ECE7] dark:hover:bg-[#2B2E35] transition-colors"
-            title="Verification Standards & Rules"
+            className="clay-btn-neutral hidden sm:flex h-[40px] px-[12px] text-[12px] font-medium items-center gap-[6px] cursor-pointer"
+            title="Grounding & Verification Standards"
           >
-            <ShieldCheck className="w-[15px] h-[15px] text-[#3D5248] dark:text-[#A2A9B8]" />
+            <ShieldCheck className="w-[14px] h-[14px] text-[#7FA398]" />
             <span>Rules</span>
           </button>
 
-          {/* Theme Toggle - Tactile design token */}
-          <button
-            type="button"
-            onClick={() => setDarkMode(!darkMode)}
-            className="h-[40px] px-[14px] rounded-[10px] border border-[#D0DCD5] dark:border-[#3D414A] bg-[#FFFFFF] dark:bg-[#2A2D33] hover:bg-[#F0F5F2] dark:hover:bg-[#32363D] transition-colors flex items-center gap-[8px] text-[13px] font-medium text-[#24302A] dark:text-[#E2E4EB] shadow-[0_2px_8px_rgba(40,60,50,0.05)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] cursor-pointer"
-            aria-label="Toggle color theme"
-            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {darkMode ? (
-              <>
-                <Moon className="w-[15px] h-[15px] text-[#93C5FD]" />
-                <span className="font-mono text-[12px]">Dark</span>
-              </>
-            ) : (
-              <>
-                <Sun className="w-[15px] h-[15px] text-[#D97706]" />
-                <span className="font-mono text-[12px]">Light</span>
-              </>
-            )}
-          </button>
+          {/* Tactile Rotary Dial Control */}
+          <div className="pl-[2px] border-l border-[#C9D6C9] dark:border-[#464A52]">
+            <RotaryThemeDial darkMode={darkMode} setDarkMode={setDarkMode} />
+          </div>
         </div>
       </div>
     </header>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Search, FileText, Copy, Check, Hash, BookOpen } from 'lucide-react';
 import { ExtractedDocument, DocumentSection } from '../types';
+import { StatusBead } from './StatusBead';
 
 interface SourceDrawerProps {
   isOpen: boolean;
@@ -21,7 +22,6 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
 
   useEffect(() => {
     if (isOpen && targetSectionLabel && document) {
-      // Find matching section by label substring (e.g. "Page 2" or "Section 1")
       const matched = document.sections.find((s) =>
         targetSectionLabel.toLowerCase().includes(s.label.toLowerCase()) ||
         s.label.toLowerCase().includes(targetSectionLabel.toLowerCase())
@@ -50,17 +50,17 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/50 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-2xl bg-[#FAFBF9] dark:bg-[#1E2024] border-l border-[#DCE3DF] dark:border-[#373A42] shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-200">
+      <div className="w-full max-w-2xl clay-card rounded-none sm:rounded-l-[28px] border-y-0 border-r-0 border-l border-[#E2DBD0] dark:border-[#464A52] h-full flex flex-col animate-in slide-in-from-right duration-200">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#DCE3DF] dark:border-[#373A42] flex items-center justify-between bg-white dark:bg-[#25282E]">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-[#BA7A48] dark:text-[#EDEDED]" />
+        <div className="px-6 py-4 border-b border-[#E2DBD0] dark:border-[#464A52] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <StatusBead status="grounded" size="sm" />
             <div>
-              <h3 className="font-serif font-bold text-sm text-[#18221D] dark:text-[#F5F6F8]">
-                Extracted Source
+              <h3 className="font-serif font-bold text-sm text-[#3A3A38] dark:text-[#E8E4DD]">
+                Extracted Verbatim Source
               </h3>
-              <p className="text-[11px] text-[#5D6D65] dark:text-[#9EA2AE] truncate max-w-md">
-                {document.title} ({document.fileType.toUpperCase()} · {document.totalWords.toLocaleString()} words · {document.sections.length} sections)
+              <p className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] truncate max-w-md">
+                {document.title} ({document.fileType.toUpperCase()} · {document.totalWords.toLocaleString()} words)
               </p>
             </div>
           </div>
@@ -69,16 +69,16 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
             <button
               type="button"
               onClick={handleCopySource}
-              className="text-xs text-[#485951] dark:text-[#C5CAD6] hover:text-[#18221D] dark:hover:text-white px-2 py-1 rounded-[8px] border border-[#CCD7D1] dark:border-[#40444F] bg-white dark:bg-[#31343B] flex items-center gap-1 cursor-pointer"
+              className="clay-btn-neutral h-[32px] px-[10px] text-xs font-medium flex items-center gap-1 cursor-pointer"
               title="Copy extracted text"
             >
-              {copied ? <Check className="w-3 h-3 text-[#2E7D32] dark:text-[#4ADE80]" /> : <Copy className="w-3 h-3" />}
+              {copied ? <Check className="w-3 h-3 text-[#5B9A7D]" /> : <Copy className="w-3 h-3" />}
               <span>{copied ? 'Copied' : 'Copy'}</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 rounded-[8px] text-[#6A7B72] hover:text-[#18221D] dark:text-[#8E93A0] dark:hover:text-white cursor-pointer"
+              className="w-[32px] h-[32px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#3A3A38] cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -86,73 +86,48 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
         </div>
 
         {/* Search inside source */}
-        <div className="px-5 py-2.5 border-b border-[#DCE3DF] dark:border-[#373A42] bg-[#F3F7F4] dark:bg-[#222428]">
+        <div className="px-6 py-3 border-b border-[#E2DBD0] dark:border-[#464A52]">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#75857D] dark:text-[#7A808C]" />
+            <Search className="w-3.5 h-3.5 absolute left-3.5 top-3 text-[#8A8880]" />
             <input
               type="text"
-              placeholder="Search extracted source terms, numbers, or sections..."
+              placeholder="Search source terms, numbers, or section titles..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-[8px] border border-[#CCD7D1] dark:border-[#40444F] bg-white dark:bg-[#1E2024] text-[#18221D] dark:text-[#F5F6F8] placeholder-[#8A9992] dark:placeholder-[#727784] focus:outline-hidden focus:border-[#BA7A48]"
+              className="clay-well w-full pl-9 pr-4 py-2 text-xs rounded-full text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] focus:outline-hidden"
             />
           </div>
         </div>
 
-        {/* Section navigator pills */}
-        <div className="px-5 py-2 border-b border-[#DCE3DF] dark:border-[#373A42] bg-[#EFF4F1] dark:bg-[#1D1F23] flex gap-1.5 overflow-x-auto text-[11px] no-scrollbar">
-          {document.sections.map((sec) => {
-            const isTarget = targetSectionLabel && (
-              targetSectionLabel.toLowerCase().includes(sec.label.toLowerCase()) ||
-              sec.label.toLowerCase().includes(targetSectionLabel.toLowerCase())
-            );
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => {
-                  sectionRefs.current[sec.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className={`whitespace-nowrap px-2.5 py-1 rounded-[6px] border transition-colors cursor-pointer ${
-                  isTarget
-                    ? 'bg-[#BA7A48] text-white border-[#BA7A48] dark:bg-[#EDEDED] dark:text-[#16181C]'
-                    : 'bg-white dark:bg-[#2A2D33] border-[#DCE3DF] dark:border-[#3C4049] text-[#485951] dark:text-[#A0A5B2] hover:bg-[#EAEFEA] dark:hover:bg-[#32363E]'
-                }`}
-              >
-                {sec.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Source Content */}
-        <div className="flex-1 p-5 overflow-y-auto space-y-6 text-xs text-[#283830] dark:text-[#D5D8E0] leading-relaxed font-sans">
+        {/* Sections Stream */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {filteredSections.map((sec) => {
-            const isTarget = targetSectionLabel && (
-              targetSectionLabel.toLowerCase().includes(sec.label.toLowerCase()) ||
-              sec.label.toLowerCase().includes(targetSectionLabel.toLowerCase())
-            );
+            const isTargeted =
+              targetSectionLabel &&
+              (targetSectionLabel.toLowerCase().includes(sec.label.toLowerCase()) ||
+                sec.label.toLowerCase().includes(targetSectionLabel.toLowerCase()));
 
             return (
               <div
                 key={sec.id}
-                ref={(el) => { sectionRefs.current[sec.id] = el; }}
-                className={`p-4 rounded-[12px] border transition-all ${
-                  isTarget
-                    ? 'border-[#BA7A48] dark:border-[#EDEDED] bg-[#FAF5F0] dark:bg-[#2D3037] ring-1 ring-[#BA7A48] dark:ring-[#EDEDED]'
-                    : 'border-[#DCE3DF] dark:border-[#373A43] bg-white dark:bg-[#25282E]'
+                ref={(el) => {
+                  sectionRefs.current[sec.id] = el;
+                }}
+                className={`p-4 rounded-[20px] transition-all ${
+                  isTargeted
+                    ? 'clay-well border-2 border-[#D9924D] dark:border-[#E8863C]'
+                    : 'clay-card'
                 }`}
               >
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#EAEFEA] dark:border-[#353942]">
-                  <div className="flex items-center gap-1.5 font-semibold text-xs text-[#18221D] dark:text-[#F5F6F8]">
-                    <Hash className="w-3 h-3 text-[#6A7B72] dark:text-[#8E93A0]" />
-                    <span>{sec.label}</span>
-                  </div>
-                  <span className="text-[10px] text-[#6A7B72] dark:text-[#8E93A0]">
-                    {sec.wordCount} words
+                <div className="flex items-center justify-between pb-2 border-b border-[#E2DBD0]/60 dark:border-[#464A52]/60 mb-2">
+                  <span className="font-mono text-xs font-bold text-[#D9924D] dark:text-[#E8863C]">
+                    {sec.label}
+                  </span>
+                  <span className="text-[10px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+                    {sec.wordCount.toLocaleString()} words
                   </span>
                 </div>
-                <div className="whitespace-pre-wrap font-sans text-xs text-[#283830] dark:text-[#C5C8D0] leading-relaxed">
+                <div className="text-xs font-mono leading-relaxed text-[#3A3A38] dark:text-[#E8E4DD] whitespace-pre-wrap select-text">
                   {sec.content}
                 </div>
               </div>

@@ -37,7 +37,7 @@ async function startServer() {
   });
 
   // Extract from uploaded file
-  app.post("/api/extract-file", upload.single("file"), async (req, res) => {
+  app.post("/api/extract-file", upload.single("file") as any, async (req: any, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file was uploaded." });

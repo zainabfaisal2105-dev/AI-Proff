@@ -1,6 +1,8 @@
 import React from 'react';
-import { Check, Loader2, ShieldCheck } from 'lucide-react';
+import { Check, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 import { ProcessingStage } from '../types';
+import { DonutRing } from './DonutRing';
+import { StatusBead } from './StatusBead';
 
 interface ProcessingViewProps {
   stage: ProcessingStage;
@@ -14,10 +16,10 @@ interface StepItem {
 }
 
 const STEPS: StepItem[] = [
-  { id: 'reading', label: 'Reading source bytes', description: 'Buffering document stream and resolving character encoding' },
-  { id: 'extracting', label: 'Extracting content & structure', description: 'Extracting text, paragraphs, headings, tables, and page markers' },
-  { id: 'organizing', label: 'Chunking & boundary tracking', description: 'Organizing into traceable source segments with coordinate IDs' },
-  { id: 'summarizing', label: 'Synthesizing source-grounded summary', description: 'Enforcing zero hallucination, numerical precision, and condition retention' },
+  { id: 'reading', label: 'Reading document bytes', description: 'Buffering stream & parsing typography' },
+  { id: 'extracting', label: 'Extracting sections & structure', description: 'Identifying chapters, headings, and data tables' },
+  { id: 'organizing', label: 'Synthesizing reading map', description: 'Computing semantic complexity & boundary indexes' },
+  { id: 'summarizing', label: 'Formulating grounded models', description: 'Preserving numerical findings and exact quotes' },
 ];
 
 export const ProcessingView: React.FC<ProcessingViewProps> = ({ stage, fileName }) => {
@@ -49,90 +51,82 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ stage, fileName 
     }
   };
 
+  const pct = getProgressPercentage();
+
   return (
-    <div className="w-full max-w-[500px] mx-auto py-[32px] px-[16px]">
-      <div className="bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#3C4049] rounded-[16px] p-[24px] shadow-[0_8px_24px_-4px_rgba(40,60,50,0.08),0_2px_6px_rgba(40,60,50,0.03)] dark:shadow-[0_10px_30px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.07)] space-y-[20px]">
-        {/* Top title */}
-        <div className="text-center space-y-[8px]">
-          <div className="w-[44px] h-[44px] mx-auto rounded-full bg-[#EAEFEA] dark:bg-[#202227] text-[#BA7A48] dark:text-[#EDEDED] flex items-center justify-center">
-            <Loader2 className="w-[22px] h-[22px] animate-spin text-[#BA7A48] dark:text-[#EDEDED]" />
-          </div>
-          <h2 className="text-[18px] font-serif font-bold text-[#18221D] dark:text-[#F5F6F8]">
-            Processing Document
-          </h2>
-          {fileName && (
-            <p className="text-[12px] font-mono text-[#586860] dark:text-[#9EA2AE] truncate max-w-[360px] mx-auto">
-              {fileName}
-            </p>
-          )}
-        </div>
-
-        {/* Linear Progress Bar */}
-        <div className="w-full h-[5px] bg-[#E2EBE5] dark:bg-[#1E2024] rounded-full overflow-hidden">
-          <div
-            className="h-full bg-[#BA7A48] dark:bg-[#EDEDED] transition-all duration-300 rounded-full"
-            style={{ width: `${getProgressPercentage()}%` }}
+    <div className="w-full max-w-[520px] mx-auto py-[32px] px-[16px]">
+      <div className="clay-card p-[28px] sm:p-[36px] space-y-[24px] text-center relative">
+        {/* Donut Progress Ring with percentage */}
+        <div className="flex flex-col items-center justify-center space-y-[12px]">
+          <DonutRing
+            value={pct}
+            max={100}
+            size={90}
+            strokeWidth={8}
+            color="#D9924D"
+            label="progress"
           />
+
+          <div className="space-y-[4px]">
+            <h2 className="text-[20px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD]">
+              Analyzing Complex Document
+            </h2>
+            {fileName && (
+              <p className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] truncate max-w-[340px] mx-auto">
+                {fileName}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Steps List */}
-        <div className="space-y-[8px]">
+        {/* Steps List with Clay Wells & Status Beads */}
+        <div className="space-y-[10px] text-left">
           {STEPS.map((step) => {
             const status = getStepStatus(step.id);
             return (
               <div
                 key={step.id}
-                className={`flex items-start gap-[12px] p-[10px] rounded-[10px] transition-colors ${
+                className={`p-[14px] rounded-[18px] transition-all flex items-start gap-[12px] ${
                   status === 'active'
-                    ? 'bg-[#FAF5F0] dark:bg-[#34373F] border border-[#EADBCE] dark:border-[#4B4F5B]'
-                    : ''
+                    ? 'clay-well border-2 border-[#D9924D] dark:border-[#E8863C]'
+                    : status === 'completed'
+                    ? 'clay-card opacity-90'
+                    : 'opacity-40'
                 }`}
               >
                 {/* Status Indicator */}
                 <div className="mt-[2px] shrink-0">
                   {status === 'completed' && (
-                    <div className="w-[18px] h-[18px] rounded-full bg-[#BA7A48] dark:bg-[#EDEDED] text-white dark:text-[#16181C] flex items-center justify-center shadow-2xs">
-                      <Check className="w-[11px] h-[11px] stroke-[2.5]" />
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#7FA398] text-white flex items-center justify-center">
+                      <Check className="w-[12px] h-[12px] stroke-[3]" />
                     </div>
                   )}
                   {status === 'active' && (
-                    <div className="w-[18px] h-[18px] flex items-center justify-center text-[#BA7A48] dark:text-[#EDEDED]">
-                      <Loader2 className="w-[15px] h-[15px] animate-spin" />
-                    </div>
+                    <StatusBead status="reading" size="sm" showPulse />
                   )}
                   {status === 'pending' && (
-                    <div className="w-[18px] h-[18px] rounded-full border border-[#CAD5CE] dark:border-[#424650]" />
+                    <div className="w-[14px] h-[14px] rounded-full border-2 border-[#8A8880]/40 m-[3px]" />
                   )}
                 </div>
 
-                {/* Text */}
-                <div className="space-y-[2px] flex-1">
-                  <div
-                    className={`text-[13px] font-medium ${
-                      status === 'active'
-                        ? 'text-[#18221D] dark:text-[#F5F6F8] font-semibold'
-                        : status === 'completed'
-                        ? 'text-[#48564F] dark:text-[#A0A5B2]'
-                        : 'text-[#8A9890] dark:text-[#686D7A]'
-                    }`}
-                  >
-                    {step.label}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-serif font-bold text-[#3A3A38] dark:text-[#E8E4DD]">
+                      {step.label}
+                    </span>
+                    {status === 'active' && (
+                      <span className="text-[10px] font-mono text-[#D9924D] dark:text-[#E8863C] font-bold">
+                        Running...
+                      </span>
+                    )}
                   </div>
-                  {status === 'active' && (
-                    <div className="text-[11px] text-[#6A7870] dark:text-[#8D92A0] leading-tight">
-                      {step.description}
-                    </div>
-                  )}
+                  <p className="text-[11px] text-[#8A8880] dark:text-[#9A9691] mt-[2px] leading-snug">
+                    {step.description}
+                  </p>
                 </div>
               </div>
             );
           })}
-        </div>
-
-        {/* Quiet note */}
-        <div className="pt-[12px] flex items-center justify-center gap-[6px] text-center text-[11px] text-[#6A7870] dark:text-[#8A8F9B] border-t border-[#E5EDE7] dark:border-[#353942]">
-          <ShieldCheck className="w-[14px] h-[14px] text-[#2E7D32] dark:text-[#4ADE80]" />
-          <span>Strict zero-hallucination constraint active</span>
         </div>
       </div>
     </div>

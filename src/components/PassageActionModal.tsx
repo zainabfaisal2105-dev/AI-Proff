@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lightbulb, Sparkles, X, BookmarkPlus, MessageSquare, Copy, Check, Loader2 } from 'lucide-react';
+import { StatusBead } from './StatusBead';
 
 interface PassageActionModalProps {
   isOpen: boolean;
@@ -88,156 +89,161 @@ export const PassageActionModal: React.FC<PassageActionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-[16px] bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#2A2D33] border border-[#DCE3DF] dark:border-[#373A42] rounded-[16px] max-w-[620px] w-full p-[24px] shadow-[0_16px_48px_rgba(0,0,0,0.15)] space-y-[18px] max-h-[90vh] overflow-y-auto">
-        {/* Modal Top Header */}
-        <div className="flex items-center justify-between pb-[14px] border-b border-[#EAEFEA] dark:border-[#373A42]">
-          <div className="flex items-center gap-[8px]">
-            <div className="w-[30px] h-[30px] rounded-[8px] bg-[#EFF4F1] dark:bg-[#32363E] text-[#BA7A48] dark:text-[#EDEDED] flex items-center justify-center">
-              {action === 'explain' && <Lightbulb className="w-[16px] h-[16px]" />}
-              {action === 'simplify' && <Sparkles className="w-[16px] h-[16px]" />}
-              {action === 'note' && <BookmarkPlus className="w-[16px] h-[16px]" />}
-            </div>
-            <div>
-              <h3 className="font-serif font-bold text-[15px] text-[#18221D] dark:text-[#F5F6F8] capitalize">
-                {action === 'explain' ? 'Grounded Passage Explanation' : action === 'simplify' ? 'Simplified Passage Phrasing' : 'Save Note on Passage'}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-[16px] bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="clay-card max-w-[620px] w-full p-[24px] sm:p-[28px] space-y-[20px] max-h-[90vh] overflow-y-auto relative">
+        {/* Modal Top Header with Status Bead */}
+        <div className="flex items-center justify-between pb-[14px] border-b border-[#C9D6C9] dark:border-[#464A52]">
+          <div className="flex items-center gap-[10px]">
+            <StatusBead status="grounded" size="sm" showPulse={isLoading} />
+            <div className="flex items-center gap-[8px]">
+              <div className="w-[32px] h-[32px] rounded-full bg-[#D6E0D6] dark:bg-[#3C4046] text-[#D9924D] dark:text-[#E8863C] flex items-center justify-center">
+                {action === 'explain' && <Lightbulb className="w-[16px] h-[16px]" />}
+                {action === 'simplify' && <Sparkles className="w-[16px] h-[16px]" />}
+                {action === 'note' && <BookmarkPlus className="w-[16px] h-[16px]" />}
+              </div>
+              <h3 className="font-serif font-bold text-[16px] text-[#3A3A38] dark:text-[#E8E4DD]">
+                {action === 'explain' && 'Technical Passage Explanation'}
+                {action === 'simplify' && 'Plain-Language Simplification'}
+                {action === 'note' && 'Attach Research Note'}
               </h3>
-              <p className="text-[11px] font-mono text-[#6A7B72] dark:text-[#8E93A0]">
-                {sectionContext}
-              </p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="p-[6px] rounded-[6px] text-[#8E9E95] hover:text-[#18221D] dark:hover:text-white cursor-pointer"
+            className="w-[30px] h-[30px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#3A3A38] dark:hover:text-[#E8E4DD] cursor-pointer"
           >
-            <X className="w-[16px] h-[16px]" />
+            <X className="w-[14px] h-[14px]" />
           </button>
         </div>
 
-        {/* Original Selected Excerpt */}
-        <div className="space-y-[6px]">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-[#8E9E95] dark:text-[#7A808C]">
-            Selected Passage:
-          </span>
-          <div className="p-[12px] rounded-[8px] bg-[#FAFBF9] dark:bg-[#23252A] border border-[#DCE3DF] dark:border-[#373A42] font-serif text-[13px] italic text-[#283830] dark:text-[#D5D8E0] leading-relaxed">
-            "{passage}"
+        {/* Selected Excerpt Snippet with soft translucent wash */}
+        <div className="clay-well p-[16px] rounded-[18px] space-y-[6px]">
+          <div className="flex items-center justify-between text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+            <span>From: {sectionContext}</span>
+            <span>{passage.trim().split(/\s+/).length} words selected</span>
           </div>
+          <p className="text-[13px] font-serif italic text-[#3A3A38] dark:text-[#E8E4DD] leading-relaxed border-l-2 border-[#7FA398] pl-[10px]">
+            "{passage}"
+          </p>
         </div>
 
-        {/* AI Output or Loading */}
-        {action !== 'note' && (
-          <div className="space-y-[12px]">
-            {isLoading ? (
-              <div className="py-[30px] text-center space-y-[10px]">
-                <Loader2 className="w-[24px] h-[24px] animate-spin text-[#BA7A48] dark:text-[#EDEDED] mx-auto" />
-                <p className="text-[12px] font-mono text-[#6A7B72] dark:text-[#8E93A0]">
-                  Analyzing passage within document context...
-                </p>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="py-[32px] flex flex-col items-center justify-center text-center space-y-[12px] text-[#D9924D] dark:text-[#E8863C]">
+            <Loader2 className="w-[28px] h-[28px] animate-spin" />
+            <p className="text-[13px] font-mono">
+              Grounding analysis in source citations...
+            </p>
+          </div>
+        )}
+
+        {/* Result Content */}
+        {!isLoading && action !== 'note' && (
+          <div className="space-y-[16px]">
+            <div className="clay-card p-[18px] space-y-[10px]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono font-bold text-[#D9924D] dark:text-[#E8863C] uppercase tracking-wider">
+                  {action === 'simplify' ? 'Plain Language Output' : 'Conceptual Breakdown'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="clay-well h-[28px] px-[10px] rounded-full text-[11px] flex items-center gap-[4px] text-[#8A8880] hover:text-[#3A3A38] cursor-pointer"
+                >
+                  {copied ? <Check className="w-[12px] h-[12px] text-[#5B9A7D]" /> : <Copy className="w-[12px] h-[12px]" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
+                </button>
               </div>
-            ) : (
-              <>
-                <div className="space-y-[6px]">
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-[#8E9E95] dark:text-[#7A808C]">
-                    {action === 'explain' ? 'Accessible Explanation:' : 'Plain-Language Phrasing:'}
-                  </span>
-                  <div className="p-[14px] rounded-[10px] bg-white dark:bg-[#202227] border border-[#DCE3DF] dark:border-[#373A42] text-[13px] text-[#18221D] dark:text-[#F5F6F8] leading-relaxed whitespace-pre-wrap">
-                    {resultText}
-                  </div>
-                </div>
 
-                {groundedNote && (
-                  <div className="text-[11px] font-mono text-[#6A7B72] dark:text-[#8E93A0] flex items-center gap-[6px]">
-                    <span className="w-[5px] h-[5px] rounded-full bg-[#BA7A48]" />
-                    <span>{groundedNote}</span>
-                  </div>
-                )}
+              <p className="text-[14px] leading-relaxed text-[#3A3A38] dark:text-[#E8E4DD] font-sans">
+                {resultText}
+              </p>
+            </div>
 
-                {/* Terminology definitions */}
-                {terminology.length > 0 && (
-                  <div className="space-y-[6px]">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-[#8E9E95]">
-                      Technical Terms:
-                    </span>
-                    <div className="space-y-[4px]">
-                      {terminology.map((t, idx) => (
-                        <div key={idx} className="p-[8px] rounded-[6px] bg-[#FAFBF9] dark:bg-[#23252A] text-[12px]">
-                          <strong className="text-[#BA7A48] dark:text-[#EDEDED]">{t.term}:</strong>{' '}
-                          <span className="text-[#283830] dark:text-[#D5D8E0]">{t.explanation}</span>
-                        </div>
-                      ))}
+            {/* Simplified Terminology Cards if any */}
+            {terminology.length > 0 && (
+              <div className="space-y-[8px]">
+                <span className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] uppercase tracking-wider">
+                  Decoded Terminology
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-[8px]">
+                  {terminology.map((t, idx) => (
+                    <div key={idx} className="clay-well p-[12px] rounded-[14px] space-y-[4px]">
+                      <span className="text-[12px] font-mono font-bold text-[#7FA398]">
+                        {t.term}
+                      </span>
+                      <p className="text-[12px] text-[#3A3A38] dark:text-[#E8E4DD] leading-snug">
+                        {t.explanation}
+                      </p>
                     </div>
-                  </div>
-                )}
-              </>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {/* Note Editor Area */}
+        {/* Personal Note Editor */}
         {showNoteEditor && (
-          <div className="space-y-[8px] pt-[8px] border-t border-[#EAEFEA] dark:border-[#373A42]">
-            <label className="block text-[12px] font-medium text-[#18221D] dark:text-[#F5F6F8]">
-              Your Personal Note:
+          <div className="space-y-[10px]">
+            <label className="block text-[12px] font-mono text-[#8A8880] dark:text-[#9A9691]">
+              Personal Note Attached to this Passage:
             </label>
             <textarea
+              rows={3}
               value={personalNoteInput}
               onChange={(e) => setPersonalNoteInput(e.target.value)}
-              placeholder="Record your thoughts or questions on this passage..."
-              rows={3}
-              className="w-full p-[10px] rounded-[8px] bg-white dark:bg-[#1E2024] border border-[#CCD7D1] dark:border-[#3C4049] text-[13px] text-[#18221D] dark:text-[#F5F6F8] focus:outline-hidden focus:border-[#BA7A48]"
+              placeholder="Record your hypothesis, question, or annotation..."
+              className="clay-well w-full p-[14px] text-[13px] text-[#3A3A38] dark:text-[#E8E4DD] placeholder-[#8A8880] focus:outline-hidden focus:ring-2 focus:ring-[#D9924D] dark:focus:ring-[#E8863C] rounded-[16px]"
             />
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-[10px] border-t border-[#EAEFEA] dark:border-[#373A42] flex-wrap gap-[8px]">
-          <div className="flex items-center gap-[6px]">
-            {action !== 'note' && (
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="h-[34px] px-[10px] rounded-[6px] border border-[#CCD7D1] dark:border-[#3C4049] text-[12px] text-[#283830] dark:text-[#D5D8E0] hover:bg-[#EFF4F1] flex items-center gap-[4px] cursor-pointer"
-              >
-                {copied ? <Check className="w-[13px] h-[13px] text-[#2E7D32]" /> : <Copy className="w-[13px] h-[13px]" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
-              </button>
-            )}
-
+        {/* Footer Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-[10px] pt-[14px] border-t border-[#C9D6C9] dark:border-[#464A52]">
+          <div className="flex items-center gap-[8px]">
             <button
               type="button"
               onClick={() => {
                 onOpenInChat(passage, sectionContext);
                 onClose();
               }}
-              className="h-[34px] px-[10px] rounded-[6px] border border-[#CCD7D1] dark:border-[#3C4049] text-[12px] text-[#283830] dark:text-[#D5D8E0] hover:bg-[#EFF4F1] flex items-center gap-[4px] cursor-pointer"
+              className="clay-btn-neutral h-[38px] px-[14px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer"
             >
-              <MessageSquare className="w-[13px] h-[13px] text-[#60A5FA]" />
-              <span>Ask in Chat</span>
+              <MessageSquare className="w-[13px] h-[13px] text-[#7FA398]" />
+              <span>Ask in Q&A Chat</span>
             </button>
           </div>
 
           <div className="flex items-center gap-[8px]">
-            {!showNoteEditor ? (
+            {!showNoteEditor && action !== 'note' ? (
               <button
                 type="button"
                 onClick={() => setShowNoteEditor(true)}
-                className="h-[34px] px-[12px] rounded-[6px] bg-[#EFF4F1] dark:bg-[#32363E] text-[#283830] dark:text-[#D5D8E0] text-[12px] font-medium hover:bg-[#E2ECE5] flex items-center gap-[6px] cursor-pointer"
+                className="clay-btn-neutral h-[38px] px-[14px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer"
               >
-                <BookmarkPlus className="w-[13px] h-[13px]" />
+                <BookmarkPlus className="w-[13px] h-[13px] text-[#D9924D] dark:text-[#E8863C]" />
                 <span>Save to Notes</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleSaveNoteSubmit}
-                className="h-[34px] px-[14px] rounded-[6px] bg-[#BA7A48] hover:bg-[#A96D3C] text-white text-[12px] font-medium shadow-xs cursor-pointer"
+                disabled={!personalNoteInput.trim() && !resultText}
+                className="clay-btn-primary h-[38px] px-[18px] text-[12px] font-medium flex items-center gap-[6px] cursor-pointer disabled:opacity-50"
               >
-                Save Note
+                <span>Save Note</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="clay-btn-neutral h-[38px] px-[14px] text-[12px] cursor-pointer"
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>
