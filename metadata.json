@@ -1,0 +1,6 @@
+{
+  "name": "AI-Proff",
+  "description": "An AI research reading companion designed to understand difficult technical and academic documents without losing the original meaning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

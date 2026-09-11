@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    /* Light Theme (Emotional UI / Soft 3D Sage & Porcelain Palette) */
+    --bg-base: #EEF2EF;
+    --text-base: #18221D;
+    --card-base: #FFFFFF;
+    --border-base: #DCE3DF;
+    --muted-base: #6C7A73;
+    --accent-primary: #BA7A48;
+  }
+  .dark {
+    /* Dark Theme (Matte Graphite & Sculpted Titanium Slate Palette) */
+    --bg-base: #222428;
+    --text-base: #F5F6F8;
+    --card-base: #2A2D33;
+    --border-base: #3C4049;
+    --muted-base: #868B96;
+    --accent-primary: #EDEDED;
+  }
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-base);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+}
+
+/* Custom Soft 3D and Matte Slate Shadows */
+.soft-card-light {
+  box-shadow: 0 8px 26px -4px rgba(40, 60, 50, 0.08), 0 2px 6px rgba(40, 60, 50, 0.03);
+}
+
+.matte-card-dark {
+  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Elegant scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 150, 145, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 150, 145, 0.45);
+}
