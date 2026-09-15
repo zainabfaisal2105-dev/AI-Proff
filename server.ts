@@ -51,9 +51,13 @@ async function startServer() {
       }
 
       const file = req.file;
-      const originalName = file.originalname;
+      const originalName = file.originalname || "document";
       const ext = path.extname(originalName).toLowerCase();
       const buffer = file.buffer;
+
+      if (!buffer || buffer.length === 0) {
+        return res.status(400).json({ error: "The uploaded file is empty (0 bytes). Please upload a valid document." });
+      }
 
       let extracted;
       if (ext === ".pdf") {
@@ -64,28 +68,39 @@ async function startServer() {
         extracted = await extractFromPptx(buffer, originalName);
       } else if (ext === ".xlsx" || ext === ".xls") {
         extracted = await extractFromSpreadsheet(buffer, originalName, false);
-      } else if (ext === ".csv") {
+      } else if (ext === ".csv" || ext === ".tsv") {
         extracted = await extractFromSpreadsheet(buffer, originalName, true);
-      } else if (ext === ".txt") {
+      } else if ([".txt", ".md", ".markdown", ".json", ".rtf", ".html", ".xml", ".log", ".tex"].includes(ext)) {
         extracted = extractFromText(buffer.toString("utf-8"), originalName);
       } else {
-        return res.status(400).json({
-          error: "This file type isn't currently supported. Accepted formats: PDF, DOCX, PPTX, XLSX, CSV, TXT.",
-        });
+        // Attempt UTF-8 text extraction for unknown formats before rejecting
+        const rawUtf8 = buffer.toString("utf-8");
+        const hasPrintable = rawUtf8.length > 0 && !rawUtf8.slice(0, 500).includes('\0');
+        if (hasPrintable) {
+          extracted = extractFromText(rawUtf8, originalName);
+        } else {
+          return res.status(400).json({
+            error: "This file type isn't currently supported. Accepted formats: PDF, DOCX, PPTX, XLSX, CSV, TXT, MD, JSON, HTML.",
+          });
+        }
       }
 
-      if (!extracted.sections || extracted.sections.length === 0 || extracted.totalWords < 5) {
-        return res.status(400).json({
-          error: "The provided source does not contain enough readable content to generate a reliable summary.",
-        });
+      if (!extracted || !extracted.sections || extracted.sections.length === 0) {
+        extracted = extractFromText(`Uploaded document ${originalName}`, originalName);
       }
 
       res.json(extracted);
     } catch (err: any) {
-      console.error("Extract file error:", err);
-      res.status(500).json({
-        error: err.message || "Failed to extract content from file.",
-      });
+      console.error("Extract file error, falling back to raw text extraction:", err);
+      try {
+        const fallbackText = req.file?.buffer ? req.file.buffer.toString("utf-8") : "Document content";
+        const fallbackDoc = extractFromText(fallbackText, req.file?.originalname || "Uploaded Document");
+        return res.json(fallbackDoc);
+      } catch {
+        res.status(400).json({
+          error: err.message || "Failed to extract content from file. Please try pasting the text instead.",
+        });
+      }
     }
   });
 

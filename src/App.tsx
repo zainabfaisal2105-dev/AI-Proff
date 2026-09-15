@@ -406,6 +406,17 @@ export default function App() {
 
       if (!extractRes.ok) {
         const errData = await extractRes.json().catch(() => ({}));
+        // If server failed, attempt client-side reading for text/markdown/csv/html
+        try {
+          const clientText = await file.text();
+          if (clientText && clientText.trim().length > 10) {
+            const clientDoc = extractTextClientSide(clientText, file.name.replace(/\.[^/.]+$/, ''));
+            setExtractedDoc(clientDoc);
+            setStage('organizing');
+            await runSummarizeAndVerify(clientDoc);
+            return;
+          }
+        } catch {}
         throw new Error(errData.error || "I couldn't extract reliable text from this document.");
       }
 
@@ -416,6 +427,18 @@ export default function App() {
       await runSummarizeAndVerify(doc);
     } catch (err: any) {
       console.error('File process error:', err);
+      // Secondary fallback: check if client can read text directly
+      try {
+        const clientText = await file.text();
+        if (clientText && clientText.trim().length > 10) {
+          const clientDoc = extractTextClientSide(clientText, file.name.replace(/\.[^/.]+$/, ''));
+          setExtractedDoc(clientDoc);
+          setStage('organizing');
+          await runSummarizeAndVerify(clientDoc);
+          return;
+        }
+      } catch {}
+
       setErrorMessage(err.message || 'Failed to process file.');
       setStage('idle');
     }

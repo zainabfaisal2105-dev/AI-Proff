@@ -3,7 +3,7 @@ import { DocumentSection, SummaryResult } from "../src/types.js";
 
 let geminiClient: GoogleGenAI | null = null;
 
-function getGemini(): GoogleGenAI | null {
+export function getGemini(): GoogleGenAI | null {
   if (!geminiClient) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
