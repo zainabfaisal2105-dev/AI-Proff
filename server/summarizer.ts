@@ -69,11 +69,11 @@ export async function generateSourceSummary(
 
   const ai = getGemini();
 
-  // Combine sections with explicit source tags, capping length safely if ultra-large to avoid truncation
+  // Combine sections with explicit source tags, supporting large multi-page documents
   const formattedSource = safeSections
-    .map(s => `=== SOURCE SEGMENT: ${s.label || s.id} ===\n${(s.content || '').slice(0, 15000)}`)
+    .map(s => `=== SOURCE SEGMENT: ${s.label || s.id} ===\n${(s.content || '').slice(0, 50000)}`)
     .join('\n\n')
-    .slice(0, 60000);
+    .slice(0, 500000);
 
   const safeTitle = (title || 'Document').replace(/["\\]/g, ' ');
 

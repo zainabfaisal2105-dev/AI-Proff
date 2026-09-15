@@ -35,7 +35,12 @@ import {
   deleteSession,
 } from './utils/storage';
 import { SampleDocument, SAMPLE_DOCUMENTS } from './data/sampleDocuments';
-import { extractTextClientSide, generateClientSummaryFallback, generateDefaultOverview } from './utils/textExtractor';
+import {
+  extractTextClientSide,
+  generateClientSummaryFallback,
+  generateDefaultOverview,
+  isPrintablePlainText,
+} from './utils/textExtractor';
 import {
   Compass,
   BookOpen,
@@ -406,18 +411,23 @@ export default function App() {
 
       if (!extractRes.ok) {
         const errData = await extractRes.json().catch(() => ({}));
-        // If server failed, attempt client-side reading for text/markdown/csv/html
-        try {
-          const clientText = await file.text();
-          if (clientText && clientText.trim().length > 10) {
-            const clientDoc = extractTextClientSide(clientText, file.name.replace(/\.[^/.]+$/, ''));
-            setExtractedDoc(clientDoc);
-            setStage('organizing');
-            await runSummarizeAndVerify(clientDoc);
-            return;
-          }
-        } catch {}
-        throw new Error(errData.error || "I couldn't extract reliable text from this document.");
+        const serverError = errData.error || "I couldn't extract readable text from this document.";
+
+        // If file is plain text format and server had an issue, safely attempt client text reading
+        const isLikelyTextFormat = /\.(txt|md|markdown|csv|tsv|json|html|xml|log|tex)$/i.test(file.name);
+        if (isLikelyTextFormat) {
+          try {
+            const clientText = await file.text();
+            if (isPrintablePlainText(clientText) && clientText.trim().length > 10) {
+              const clientDoc = extractTextClientSide(clientText, file.name.replace(/\.[^/.]+$/, ''));
+              setExtractedDoc(clientDoc);
+              setStage('organizing');
+              await runSummarizeAndVerify(clientDoc);
+              return;
+            }
+          } catch {}
+        }
+        throw new Error(serverError);
       }
 
       const doc: ExtractedDocument = await extractRes.json();
@@ -427,19 +437,7 @@ export default function App() {
       await runSummarizeAndVerify(doc);
     } catch (err: any) {
       console.error('File process error:', err);
-      // Secondary fallback: check if client can read text directly
-      try {
-        const clientText = await file.text();
-        if (clientText && clientText.trim().length > 10) {
-          const clientDoc = extractTextClientSide(clientText, file.name.replace(/\.[^/.]+$/, ''));
-          setExtractedDoc(clientDoc);
-          setStage('organizing');
-          await runSummarizeAndVerify(clientDoc);
-          return;
-        }
-      } catch {}
-
-      setErrorMessage(err.message || 'Failed to process file.');
+      setErrorMessage(err.message || 'Failed to process file. Please ensure the file is not empty or corrupted.');
       setStage('idle');
     }
   };

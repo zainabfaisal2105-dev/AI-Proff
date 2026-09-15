@@ -1,6 +1,31 @@
 import { ExtractedDocument, DocumentSection, SummaryResult, DocumentOverview } from '../types';
 
 /**
+ * Validates whether raw text is authentic printable plain text rather than binary data.
+ */
+export function isPrintablePlainText(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  const sample = text.slice(0, 4000);
+  if (sample.includes('\0')) return false;
+  if (sample.startsWith('%PDF-') || sample.startsWith('PK\x03\x04') || sample.startsWith('{\\rtf')) return false;
+
+  // Count control characters (excluding newline, cr, tab) and Unicode replacement chars
+  let nonPrintable = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const code = sample.charCodeAt(i);
+    if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 0xfffd) {
+      nonPrintable++;
+    }
+  }
+
+  // If more than 5% is non-printable or replacement chars, it's binary
+  if (sample.length > 50 && nonPrintable / sample.length > 0.05) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Extract structured sections and metadata from raw text directly on the client side.
  * Guarantees zero-failure, instant processing without network dependencies.
  */
@@ -8,6 +33,10 @@ export function extractTextClientSide(rawText: string, title = 'Document'): Extr
   const cleanText = (rawText || '').trim();
   if (!cleanText) {
     throw new Error('The provided text is empty. Please enter or paste valid document content.');
+  }
+
+  if (!isPrintablePlainText(cleanText)) {
+    throw new Error('The uploaded file contains binary or unreadable data.');
   }
 
   const sections: DocumentSection[] = [];

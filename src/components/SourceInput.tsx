@@ -178,7 +178,7 @@ export const SourceInput: React.FC<SourceInputProps> = ({
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt"
+              accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.tsv,.txt,.md,.markdown,.rtf,.epub,.odt,.ods,.odp,.json,.html"
               onChange={handleFileSelect}
               disabled={isLoading}
             />
@@ -193,7 +193,7 @@ export const SourceInput: React.FC<SourceInputProps> = ({
             </div>
 
             <p className="mt-[6px] text-[12px] font-mono text-[#8A8880] dark:text-[#9A9691]">
-              PDF · DOCX · PPTX · XLSX · CSV · TXT (up to 30MB)
+              PDF · DOCX · PPTX · XLSX · CSV · TXT · RTF · EPUB · ODT (up to 30MB)
             </p>
 
             <div className="mt-[18px]">

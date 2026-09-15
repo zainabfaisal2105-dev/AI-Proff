@@ -2,21 +2,23 @@ import express from "express";
 import path from "path";
 import multer from "multer";
 import {
+  extractDocumentBuffer,
   extractFromPdf,
   extractFromDocx,
   extractFromPptx,
   extractFromSpreadsheet,
   extractFromText,
   extractFromUrl,
-} from "./server/extractor.js";
-import { generateSourceSummary, buildDeterministicSummary } from "./server/summarizer.js";
-import { verifySummaryAgainstSource, fixSummarySection } from "./server/checker.js";
+  isBinaryOrGarbageText,
+} from "./server/extractor";
+import { generateSourceSummary, buildDeterministicSummary } from "./server/summarizer";
+import { verifySummaryAgainstSource, fixSummarySection } from "./server/checker";
 import {
   generateDocumentOverview,
   generateGuidedSection,
   answerDocumentChat,
   explainOrSimplifyPassage,
-} from "./server/companion.js";
+} from "./server/companion";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -52,55 +54,26 @@ async function startServer() {
 
       const file = req.file;
       const originalName = file.originalname || "document";
-      const ext = path.extname(originalName).toLowerCase();
       const buffer = file.buffer;
 
       if (!buffer || buffer.length === 0) {
         return res.status(400).json({ error: "The uploaded file is empty (0 bytes). Please upload a valid document." });
       }
 
-      let extracted;
-      if (ext === ".pdf") {
-        extracted = await extractFromPdf(buffer, originalName);
-      } else if (ext === ".docx" || ext === ".doc") {
-        extracted = await extractFromDocx(buffer, originalName);
-      } else if (ext === ".pptx" || ext === ".ppt") {
-        extracted = await extractFromPptx(buffer, originalName);
-      } else if (ext === ".xlsx" || ext === ".xls") {
-        extracted = await extractFromSpreadsheet(buffer, originalName, false);
-      } else if (ext === ".csv" || ext === ".tsv") {
-        extracted = await extractFromSpreadsheet(buffer, originalName, true);
-      } else if ([".txt", ".md", ".markdown", ".json", ".rtf", ".html", ".xml", ".log", ".tex"].includes(ext)) {
-        extracted = extractFromText(buffer.toString("utf-8"), originalName);
-      } else {
-        // Attempt UTF-8 text extraction for unknown formats before rejecting
-        const rawUtf8 = buffer.toString("utf-8");
-        const hasPrintable = rawUtf8.length > 0 && !rawUtf8.slice(0, 500).includes('\0');
-        if (hasPrintable) {
-          extracted = extractFromText(rawUtf8, originalName);
-        } else {
-          return res.status(400).json({
-            error: "This file type isn't currently supported. Accepted formats: PDF, DOCX, PPTX, XLSX, CSV, TXT, MD, JSON, HTML.",
-          });
-        }
-      }
+      const extracted = await extractDocumentBuffer(buffer, originalName, file.mimetype);
 
-      if (!extracted || !extracted.sections || extracted.sections.length === 0) {
-        extracted = extractFromText(`Uploaded document ${originalName}`, originalName);
+      if (!extracted || !extracted.sections || extracted.sections.length === 0 || isBinaryOrGarbageText(extracted.fullText)) {
+        return res.status(400).json({
+          error: `Could not extract readable text from "${originalName}". The document appears to be corrupted, encrypted, or empty.`,
+        });
       }
 
       res.json(extracted);
     } catch (err: any) {
-      console.error("Extract file error, falling back to raw text extraction:", err);
-      try {
-        const fallbackText = req.file?.buffer ? req.file.buffer.toString("utf-8") : "Document content";
-        const fallbackDoc = extractFromText(fallbackText, req.file?.originalname || "Uploaded Document");
-        return res.json(fallbackDoc);
-      } catch {
-        res.status(400).json({
-          error: err.message || "Failed to extract content from file. Please try pasting the text instead.",
-        });
-      }
+      console.error("Extract file error:", err);
+      res.status(400).json({
+        error: err.message || "Failed to extract readable content from file. Please ensure the document is not corrupted or password-protected.",
+      });
     }
   });
 
