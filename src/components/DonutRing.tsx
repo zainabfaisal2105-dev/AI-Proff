@@ -23,10 +23,12 @@ export const DonutRing: React.FC<DonutRingProps> = ({
   className = '',
   children,
 }) => {
-  const normalizedProgress = Math.min(100, Math.max(0, progress));
-  const radius = (size - strokeWidth) / 2;
+  const safeProgress = typeof progress === 'number' && !Number.isNaN(progress) ? progress : 0;
+  const normalizedProgress = Math.min(100, Math.max(0, safeProgress));
+  const radius = Math.max(0, (size - strokeWidth) / 2);
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (normalizedProgress / 100) * circumference;
+  const rawOffset = circumference - (normalizedProgress / 100) * circumference;
+  const strokeDashoffset = Number.isNaN(rawOffset) ? 0 : rawOffset;
 
   return (
     <div

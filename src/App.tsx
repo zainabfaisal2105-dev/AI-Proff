@@ -34,7 +34,8 @@ import {
   saveDocumentSession,
   deleteSession,
 } from './utils/storage';
-import { SampleDocument } from './data/sampleDocuments';
+import { SampleDocument, SAMPLE_DOCUMENTS } from './data/sampleDocuments';
+import { extractTextClientSide } from './utils/textExtractor';
 import {
   Compass,
   BookOpen,
@@ -204,22 +205,59 @@ export default function App() {
   };
 
   // Open a previously saved reading session with all its notes and progress
-  const handleOpenSession = (session: SavedDocumentSession) => {
-    setExtractedDoc(session.extractedDoc);
+  const handleOpenSession = async (session: SavedDocumentSession) => {
+    setErrorMessage(null);
+
+    // Validate and safely restore document structure
+    let doc = session.extractedDoc;
+    if (!doc || !Array.isArray(doc.sections) || doc.sections.length === 0) {
+      const sampleMatch = SAMPLE_DOCUMENTS.find(
+        (s) => s.title.toLowerCase().trim() === (session.title || '').toLowerCase().trim()
+      );
+      if (sampleMatch) {
+        doc = extractTextClientSide(sampleMatch.content, sampleMatch.title);
+      } else {
+        doc = {
+          title: session.title || 'Document',
+          fileType: session.fileType || 'txt',
+          sections: [
+            {
+              id: 'sec-1',
+              label: 'Section 1',
+              content: 'Document content preserved from saved session.',
+              wordCount: session.totalWords || 100,
+            },
+          ],
+          fullText: 'Document content preserved from saved session.',
+          totalWords: session.totalWords || 100,
+          totalCharacters: 500,
+        };
+      }
+    }
+
+    setExtractedDoc(doc);
     setSummary(session.summary || null);
     setOverview(session.overview || null);
     setVerification(session.verification || null);
-    setCurrentFileTitle(session.title);
+    setCurrentFileTitle(session.title || doc.title);
     setUserNotes(session.notes || []);
     setUserHighlights(session.highlights || []);
     setChatHistory(session.chatHistory || []);
-    setActiveSectionId(session.activeSectionId || session.extractedDoc.sections[0]?.id || '');
-    setVisitedSectionIds(new Set(session.visitedSectionIds || [session.extractedDoc.sections[0]?.id || '']));
+    const firstSectionId = doc.sections[0]?.id || 'sec-1';
+    setActiveSectionId(session.activeSectionId || firstSectionId);
+    setVisitedSectionIds(new Set(session.visitedSectionIds || [firstSectionId]));
     setReadingMode(session.readingMode || 'overview');
+
+    // If summary or overview is missing from this session, automatically regenerate it!
+    if (!session.summary || !session.overview) {
+      await runSummarizeAndVerify(doc);
+      return;
+    }
+
     setStage('complete');
 
     // Update last opened in storage
-    saveDocumentSession({ ...session, lastOpened: Date.now() });
+    saveDocumentSession({ ...session, extractedDoc: doc, lastOpened: Date.now() });
     setSavedSessions(getSavedSessions());
   };
 
@@ -405,26 +443,30 @@ export default function App() {
   // Process Raw Pasted Text
   const handleProcessText = async (text: string, title?: string) => {
     setErrorMessage(null);
-    setCurrentFileTitle(title || 'Pasted Document');
+    const docTitle = title || 'Pasted Document';
+    setCurrentFileTitle(docTitle);
     setStage('reading');
 
     try {
-      setStage('extracting');
-      const extractRes = await fetch('/api/extract-text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, title }),
-      });
+      setStage('organizing');
+      let doc: ExtractedDocument;
+      try {
+        const extractRes = await fetch('/api/extract-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, title: docTitle }),
+        });
 
-      if (!extractRes.ok) {
-        const errData = await extractRes.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to parse text content.');
+        if (extractRes.ok) {
+          doc = await extractRes.json();
+        } else {
+          doc = extractTextClientSide(text, docTitle);
+        }
+      } catch {
+        doc = extractTextClientSide(text, docTitle);
       }
 
-      const doc: ExtractedDocument = await extractRes.json();
       setExtractedDoc(doc);
-      setStage('organizing');
-
       await runSummarizeAndVerify(doc);
     } catch (err: any) {
       console.error('Text process error:', err);
@@ -435,7 +477,34 @@ export default function App() {
 
   // Process Sample Document
   const handleProcessSample = async (sample: SampleDocument) => {
-    await handleProcessText(sample.content, sample.title);
+    setErrorMessage(null);
+
+    // 1. If this sample was already stored/opened previously, resume it directly!
+    const existing = savedSessions.find(
+      (s) =>
+        (s.title && sample.title && s.title.toLowerCase().trim() === sample.title.toLowerCase().trim()) ||
+        s.id === sample.id
+    );
+
+    if (existing && existing.summary && existing.extractedDoc?.sections?.length) {
+      await handleOpenSession(existing);
+      return;
+    }
+
+    // 2. Otherwise process instantly via client-side text extractor
+    setCurrentFileTitle(sample.title);
+    setStage('reading');
+
+    try {
+      setStage('organizing');
+      const doc = extractTextClientSide(sample.content, sample.title);
+      setExtractedDoc(doc);
+      await runSummarizeAndVerify(doc);
+    } catch (err: any) {
+      console.error('Sample process error:', err);
+      setErrorMessage(err.message || 'Failed to process sample document.');
+      setStage('idle');
+    }
   };
 
   // Chat message sending handler

@@ -13,6 +13,7 @@ import {
   CornerDownRight,
   Layers,
   CheckCircle2,
+  X,
 } from 'lucide-react';
 import { SAMPLE_DOCUMENTS, SampleDocument } from '../data/sampleDocuments';
 import { SavedDocumentSession } from '../types';
@@ -291,9 +292,19 @@ export const SourceInput: React.FC<SourceInputProps> = ({
 
         {/* Error message alert */}
         {errorMessage && (
-          <div className="mt-[20px] p-[14px] rounded-[18px] bg-[#F9E8E4] dark:bg-[#382020] border border-[#E8AEA2] dark:border-[#602E2E] flex items-start gap-[10px] text-[13px] text-[#B83E28] dark:text-[#FCA5A5]">
-            <AlertCircle className="w-[16px] h-[16px] shrink-0 mt-[2px]" />
-            <div className="flex-1 font-medium leading-normal">{errorMessage}</div>
+          <div className="mt-[20px] p-[14px] rounded-[18px] bg-[#F9E8E4] dark:bg-[#382020] border border-[#E8AEA2] dark:border-[#602E2E] flex items-center justify-between gap-[10px] text-[13px] text-[#B83E28] dark:text-[#FCA5A5]">
+            <div className="flex items-start gap-[10px]">
+              <AlertCircle className="w-[16px] h-[16px] shrink-0 mt-[2px]" />
+              <div className="flex-1 font-medium leading-normal">{errorMessage}</div>
+            </div>
+            <button
+              type="button"
+              onClick={clearError}
+              className="p-[4px] rounded-full hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer text-[#B83E28] dark:text-[#FCA5A5] shrink-0"
+              aria-label="Dismiss error"
+            >
+              <X className="w-[14px] h-[14px]" />
+            </button>
           </div>
         )}
       </div>
@@ -333,7 +344,11 @@ export const SourceInput: React.FC<SourceInputProps> = ({
               return (
                 <div
                   key={session.id}
-                  className="clay-card clay-card-interactive p-[18px] flex flex-col justify-between gap-[16px] relative group"
+                  onClick={() => {
+                    clearError();
+                    if (onOpenSession) onOpenSession(session);
+                  }}
+                  className="clay-card clay-card-interactive p-[18px] flex flex-col justify-between gap-[16px] relative group cursor-pointer"
                 >
                   {/* Top-left status bead */}
                   <div className="flex items-center justify-between">
@@ -380,7 +395,11 @@ export const SourceInput: React.FC<SourceInputProps> = ({
                   {onOpenSession && (
                     <button
                       type="button"
-                      onClick={() => onOpenSession(session)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearError();
+                        onOpenSession(session);
+                      }}
                       className="clay-btn-neutral h-[38px] px-[14px] text-[12px] font-medium flex items-center justify-between w-full cursor-pointer group-hover:border-[#D9924D] dark:group-hover:border-[#E8863C] transition-colors"
                     >
                       <span className="font-medium text-[#3A3A38] dark:text-[#E8E4DD]">
@@ -419,7 +438,10 @@ export const SourceInput: React.FC<SourceInputProps> = ({
               key={sample.id}
               type="button"
               disabled={isLoading}
-              onClick={() => onProcessSample(sample)}
+              onClick={() => {
+                clearError();
+                onProcessSample(sample);
+              }}
               className="clay-card clay-card-interactive text-left p-[20px] flex flex-col justify-between gap-[16px] cursor-pointer disabled:opacity-50 relative group"
             >
               <div className="space-y-[10px]">

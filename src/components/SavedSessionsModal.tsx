@@ -186,7 +186,11 @@ export const SavedSessionsModal: React.FC<SavedSessionsModalProps> = ({
                     return (
                       <div
                         key={session.id}
-                        className="clay-card p-[16px] flex flex-col justify-between gap-[12px] relative group"
+                        onClick={() => {
+                          onOpenSession(session);
+                          onClose();
+                        }}
+                        className="clay-card p-[16px] flex flex-col justify-between gap-[12px] relative group cursor-pointer hover:border-[#D9924D] dark:hover:border-[#E8863C] transition-colors"
                       >
                         <div className="space-y-[8px]">
                           <div className="flex items-center justify-between">
@@ -200,7 +204,10 @@ export const SavedSessionsModal: React.FC<SavedSessionsModalProps> = ({
                               </span>
                               <button
                                 type="button"
-                                onClick={() => onDeleteSession(session.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteSession(session.id);
+                                }}
                                 className="w-[24px] h-[24px] rounded-full clay-well flex items-center justify-center text-[#8A8880] hover:text-[#C62828] cursor-pointer"
                                 title="Delete saved document"
                               >

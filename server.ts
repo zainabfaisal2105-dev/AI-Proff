@@ -31,6 +31,14 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+  // Handle malformed JSON gracefully to always return json error
+  app.use((err: any, _req: any, res: any, next: any) => {
+    if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) {
+      return res.status(400).json({ error: 'Failed to parse text content. Please check text formatting.' });
+    }
+    next(err);
+  });
+
   // API Health Check
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "document-summarizer" });
@@ -109,10 +117,10 @@ async function startServer() {
   // Extract from raw pasted text
   app.post("/api/extract-text", (req, res) => {
     try {
-      const { text, title } = req.body;
-      if (!text || typeof text !== "string" || text.trim().length < 20) {
+      const { text, title } = req.body || {};
+      if (!text || typeof text !== "string" || text.trim().length < 5) {
         return res.status(400).json({
-          error: "The provided text is too short. Please paste sufficient document content.",
+          error: "The provided text is too short. Please enter or paste sufficient document content.",
         });
       }
 
