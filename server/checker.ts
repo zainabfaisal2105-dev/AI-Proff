@@ -37,7 +37,6 @@ YOU MUST RIGOROUSLY AUDIT:
 Be objective, honest, and strict. If a claim in the summary is accurate and supported, verify it. If there is any discrepancy or unmentioned detail, report it clearly with the exact source evidence and a suggested fix.`;
 
 const CANDIDATE_MODELS = [
-  "gemini-2.5-flash",
   "gemini-3.8-flash",
   "gemini-flash-latest",
 ];
