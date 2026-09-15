@@ -63,8 +63,8 @@ export function isBinaryOrGarbageText(text: string): boolean {
   // Count recognizable linguistic and numeric characters (supports all scripts: Latin, Arabic, CJK, Cyrillic, Greek, etc.)
   const lettersAndDigits = sanitized.match(/[\p{L}\p{N}]/gu) || [];
 
-  // If the document contains at least 6 alphanumeric or linguistic characters, it is valid readable text!
-  if (lettersAndDigits.length >= 6) {
+  // If the document contains any alphanumeric or linguistic characters, it is valid readable text!
+  if (lettersAndDigits.length >= 2) {
     return false;
   }
 
@@ -314,10 +314,42 @@ export async function extractFromPdf(buffer: Buffer, originalName: string): Prom
 
 /**
  * Extracts text from Word documents (.docx, .doc), handling both modern Office OpenXML
- * and legacy Word 97-2004 binary OLE2 formats.
+ * and legacy Word 97-2004 binary OLE2 formats, as well as RTF/HTML saved with .doc extension.
  */
 export async function extractFromDocx(buffer: Buffer, originalName: string): Promise<ExtractedDocument> {
   let rawText = '';
+
+  const isRtf = (buffer.length >= 5 && buffer.slice(0, 5).toString('ascii') === '{\\rtf') ||
+    buffer.slice(0, 40).toString('ascii').includes('{\\rtf');
+  if (isRtf) {
+    try {
+      return extractFromRtf(buffer, originalName);
+    } catch (rtfErr) {
+      console.warn('RTF extraction from .doc failed, continuing fallback:', rtfErr);
+    }
+  }
+
+  const headSlice = buffer.slice(0, 1024).toString('utf-8').toLowerCase();
+  const isHtml = headSlice.includes('<html') || headSlice.includes('<!doctype') || headSlice.includes('<table');
+  if (isHtml) {
+    try {
+      const $ = cheerio.load(buffer.toString('utf-8'));
+      $('script, style, svg, noscript').remove();
+      const htmlText = $('body').text() || $.text();
+      const clean = sanitizeText(htmlText);
+      if (clean && !isBinaryOrGarbageText(clean)) {
+        return extractFromText(clean, originalName);
+      }
+    } catch (htmlErr) {
+      console.warn('HTML extraction from .doc failed, continuing fallback:', htmlErr);
+    }
+  }
+
+  const isZip = buffer.length >= 4 &&
+    buffer[0] === 0x50 && buffer[1] === 0x4B &&
+    ((buffer[2] === 0x03 && buffer[3] === 0x04) ||
+      (buffer[2] === 0x05 && buffer[3] === 0x06) ||
+      (buffer[2] === 0x07 && buffer[3] === 0x08));
 
   const isOle2 = buffer.length >= 8 &&
     buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0;
@@ -340,7 +372,7 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
   }
 
   // 2. Primary for modern DOCX: Mammoth
-  if (!rawText.trim() && !isOle2) {
+  if (!rawText.trim()) {
     try {
       const result = await mammoth.extractRawText({ buffer });
       if (result.value && result.value.trim().length > 0 && !isBinaryOrGarbageText(result.value)) {
@@ -352,7 +384,7 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
   }
 
   // 3. Secondary for DOCX: Parse XML parts directly via JSZip
-  if (!rawText.trim() && !isOle2) {
+  if (!rawText.trim() && isZip) {
     try {
       const zip = await JSZip.loadAsync(buffer);
       const xmlParts = ['word/document.xml'];
@@ -435,32 +467,62 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
   // 4. Tertiary: Scan for UTF-16LE text sequences (common in Word binary documents)
   if (!rawText.trim()) {
     const utf16Runs: string[] = [];
+    const ignoredTokens = new Set([
+      'WordDocument', 'Root Entry', 'SummaryInformation', 'DocumentSummaryInformation',
+      'CompObj', 'ObjectPool', 'Data', '1Table', '0Table', 'Normal.dotm', 'Microsoft Word'
+    ]);
+
     for (let i = 0; i < buffer.length - 12; i += 2) {
       let run = '';
       while (i < buffer.length - 1 && buffer[i + 1] === 0x00 && buffer[i] >= 0x20 && buffer[i] <= 0x7E) {
         run += String.fromCharCode(buffer[i]);
         i += 2;
       }
-      if (run.length >= 10) {
-        utf16Runs.push(run);
+      const trimmed = run.trim();
+      if (trimmed.length >= 5 && !ignoredTokens.has(trimmed) && /[\p{L}\p{N}]/u.test(trimmed)) {
+        utf16Runs.push(trimmed);
       }
     }
     if (utf16Runs.length > 0) {
-      const candidate = sanitizeText(utf16Runs.join(' '));
+      const candidate = sanitizeText(utf16Runs.join('\n\n'));
       if (!isBinaryOrGarbageText(candidate)) {
         rawText = candidate;
       }
     }
   }
 
-  // 5. Quaternary: Extract clean Latin text
+  // 5. Quaternary: Extract clean Latin / ANSI text runs (for Word 8-bit text streams)
   if (!rawText.trim()) {
     const raw = buffer.toString('latin1');
     const words = raw.match(/[\x20-\x7E\t\n\r]{4,}/g) || [];
-    const filtered = words.filter((w) => !w.startsWith('/') && !w.startsWith('<<') && !w.startsWith('PK'));
-    const candidate = sanitizeText(filtered.join(' '));
+    const ignoredPrefixes = ['/', '<<', 'PK', '\xD0\xCF', '7z', '\x7FELF'];
+    const ignoredNames = new Set([
+      'WordDocument', 'Root Entry', 'SummaryInformation', 'DocumentSummaryInformation',
+      'CompObj', 'ObjectPool', 'Microsoft Word', 'Normal.dotm'
+    ]);
+    const filtered = words
+      .map((w) => w.trim())
+      .filter((w) => {
+        if (!w || ignoredNames.has(w)) return false;
+        if (ignoredPrefixes.some((p) => w.startsWith(p))) return false;
+        return /[\p{L}\p{N}]/u.test(w);
+      });
+
+    const candidate = sanitizeText(filtered.join('\n\n'));
     if (candidate && !isBinaryOrGarbageText(candidate)) {
       rawText = candidate;
+    }
+  }
+
+  // 6. Quinary: If it is an OLE2 file, check if it might be an Excel workbook
+  if (!rawText.trim() && isOle2) {
+    try {
+      const spreadsheetDoc = await extractFromSpreadsheet(buffer, originalName, false);
+      if (spreadsheetDoc && spreadsheetDoc.sections.length > 0) {
+        return spreadsheetDoc;
+      }
+    } catch {
+      // Ignore and proceed to guard
     }
   }
 
@@ -489,6 +551,7 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
     }
     currentChunk += para + '\n\n';
   }
+
   if (currentChunk.trim()) {
     sections.push({
       id: `sec-${sectionIdx}`,
@@ -508,6 +571,7 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
   }
 
   const fullText = sections.map((s) => `[${s.label}]\n${s.content}`).join('\n\n');
+
   return {
     title: originalName.replace(/\.[^/.]+$/, ''),
     fileType: 'docx',
@@ -772,35 +836,100 @@ export async function extractFromZipArchive(buffer: Buffer, originalName: string
 }
 
 /**
- * Extracts text from spreadsheets (.xlsx, .xls, .csv, .tsv).
+ * Extracts text from spreadsheets (.xlsx, .xls, .csv, .tsv), handling modern OpenXML,
+ * legacy BIFF8 binary Excel, HTML tables saved as spreadsheets, and raw CSV.
  */
 export async function extractFromSpreadsheet(buffer: Buffer, originalName: string, isCsv: boolean): Promise<ExtractedDocument> {
   const sections: DocumentSection[] = [];
 
-  try {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+  // Check if this spreadsheet is actually an HTML table saved as .xls or .xlsx
+  const headSlice = buffer.slice(0, 1024).toString('utf-8').toLowerCase();
+  if (headSlice.includes('<table') || headSlice.includes('<html') || headSlice.includes('xmlns:x="urn:schemas-microsoft-com:office:excel"')) {
+    try {
+      const $ = cheerio.load(buffer.toString('utf-8'));
+      const rows: string[] = [];
+      $('tr').each((_, tr) => {
+        const cells: string[] = [];
+        $(tr).find('th, td').each((__, cell) => {
+          cells.push($(cell).text().trim().replace(/\s+/g, ' '));
+        });
+        if (cells.some(Boolean)) {
+          rows.push(cells.join(', '));
+        }
+      });
 
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      const csvContent = XLSX.utils.sheet_to_csv(sheet);
-      if (!csvContent.trim()) continue;
+      if (rows.length > 0) {
+        const chunkSize = 50;
+        for (let r = 0; r < rows.length; r += chunkSize) {
+          const chunk = rows.slice(r, r + chunkSize);
+          const start = r + 1;
+          const end = r + chunk.length;
+          const label = rows.length <= chunkSize ? 'Table Content' : `Rows ${start}-${end}`;
+          const content = chunk.join('\n');
+          sections.push({
+            id: `html-table-r${start}`,
+            label,
+            content,
+            wordCount: content.split(/\s+/).filter(Boolean).length,
+          });
+        }
+      }
+    } catch (htmlErr) {
+      console.warn('HTML table extraction from spreadsheet failed:', htmlErr);
+    }
+  }
 
-      const lines = csvContent.split('\n').filter((l) => l.trim());
-      if (lines.length === 0) continue;
+  // Primary: SheetJS XLSX workbook parser
+  if (sections.length === 0) {
+    try {
+      const workbook = XLSX.read(buffer, {
+        type: 'buffer',
+        cellDates: true,
+        raw: false,
+        dateNF: 'yyyy-mm-dd',
+      });
 
-      const headers = lines[0];
-      const chunkSize = 50;
-      for (let r = 1; r < lines.length; r += chunkSize) {
-        const chunkRows = lines.slice(r, r + chunkSize);
-        const startRow = r + 1;
-        const endRow = Math.min(r + chunkSize, lines.length);
-        const label =
-          workbook.SheetNames.length > 1
-            ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
-            : `Rows ${startRow}-${endRow}`;
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) continue;
 
-        const content = `Headers: ${headers}\nData:\n` + chunkRows.join('\n');
-        if (!isBinaryOrGarbageText(content)) {
+        const csvContent = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+        if (!csvContent || !csvContent.trim()) continue;
+
+        const rawLines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter((l) => {
+          return l && /[^\s,;\t"]/.test(l);
+        });
+
+        if (rawLines.length === 0) continue;
+
+        // If only 1 row exists (e.g. single item, header list, or key metrics)
+        if (rawLines.length === 1) {
+          const label = workbook.SheetNames.length > 1 ? `Sheet "${sheetName}"` : 'Sheet Content';
+          const content = `[${sheetName}]\n${rawLines[0]}`;
+          sections.push({
+            id: `sheet-${sheetName}-r1`,
+            label,
+            content,
+            wordCount: content.split(/\s+/).filter(Boolean).length,
+          });
+          continue;
+        }
+
+        // If multiple rows exist: treat row 1 as columns and chunk data rows
+        const headers = rawLines[0];
+        const dataRows = rawLines.slice(1);
+        const chunkSize = 50;
+
+        for (let r = 0; r < dataRows.length; r += chunkSize) {
+          const chunkRows = dataRows.slice(r, r + chunkSize);
+          const startRow = r + 2;
+          const endRow = r + 1 + chunkRows.length;
+          const label =
+            workbook.SheetNames.length > 1
+              ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
+              : `Rows ${startRow}-${endRow}`;
+
+          const content = `Columns: ${headers}\nData:\n` + chunkRows.join('\n');
           sections.push({
             id: `sheet-${sheetName}-r${startRow}`,
             label,
@@ -809,19 +938,50 @@ export async function extractFromSpreadsheet(buffer: Buffer, originalName: strin
           });
         }
       }
+    } catch (xlsxErr) {
+      console.warn('XLSX parsing primary tier error:', xlsxErr);
     }
-  } catch (xlsxErr) {
-    console.warn('XLSX parsing error:', xlsxErr);
   }
 
+  // Secondary fallback: Direct OpenXML extraction via JSZip for .xlsx
   if (sections.length === 0) {
-    // If it was CSV, attempt raw UTF-8 parsing
-    if (isCsv) {
-      const raw = buffer.toString('utf-8');
-      if (raw.trim() && !isBinaryOrGarbageText(raw)) {
-        return extractFromText(raw, originalName);
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      const stringsFile = zip.file('xl/sharedStrings.xml');
+      if (stringsFile) {
+        const xml = await stringsFile.async('text');
+        const textTokens = xml.match(/<t[^>]*>([^<]+)<\/t>/gi) || [];
+        const extractedStrings = textTokens
+          .map((t) => t.replace(/<[^>]+>/g, '').trim())
+          .filter(Boolean);
+
+        if (extractedStrings.length > 0) {
+          const content = extractedStrings.join('\n');
+          sections.push({
+            id: 'sheet-shared-strings',
+            label: 'Workbook Content',
+            content,
+            wordCount: content.split(/\s+/).filter(Boolean).length,
+          });
+        }
       }
+    } catch (zipErr) {
+      console.warn('XLSX zip string fallback failed:', zipErr);
     }
+  }
+
+  // Tertiary fallback: Plain text or CSV decoding
+  if (sections.length === 0) {
+    const rawUtf8 = sanitizeText(buffer.toString('utf-8'));
+    if (!isBinaryOrGarbageText(rawUtf8) && rawUtf8.length > 3) {
+      return extractFromText(rawUtf8, originalName);
+    }
+
+    const rawLatin = sanitizeText(buffer.toString('latin1'));
+    if (!isBinaryOrGarbageText(rawLatin) && rawLatin.length > 3) {
+      return extractFromText(rawLatin, originalName);
+    }
+
     throw new Error(`Could not extract readable tabular data from spreadsheet: ${originalName}`);
   }
 
@@ -1070,18 +1230,42 @@ export async function extractDocumentBuffer(
     }
   } else if (isOle2) {
     if (ext === '.xls' || ext === '.xlsx') {
-      extracted = await extractFromSpreadsheet(buffer, originalName, false);
+      try {
+        extracted = await extractFromSpreadsheet(buffer, originalName, false);
+      } catch {
+        extracted = await extractFromDocx(buffer, originalName);
+      }
     } else {
-      extracted = await extractFromDocx(buffer, originalName);
+      try {
+        extracted = await extractFromDocx(buffer, originalName);
+      } catch {
+        extracted = await extractFromSpreadsheet(buffer, originalName, false);
+      }
     }
   } else if (isRtf || ext === '.rtf') {
     extracted = extractFromRtf(buffer, originalName);
   } else if (['.docx', '.doc'].includes(ext)) {
-    extracted = await extractFromDocx(buffer, originalName);
+    try {
+      extracted = await extractFromDocx(buffer, originalName);
+    } catch (docErr) {
+      try {
+        extracted = await extractFromSpreadsheet(buffer, originalName, false);
+      } catch {
+        throw docErr;
+      }
+    }
   } else if (['.pptx', '.ppt'].includes(ext)) {
     extracted = await extractFromPptx(buffer, originalName);
   } else if (['.xlsx', '.xls'].includes(ext)) {
-    extracted = await extractFromSpreadsheet(buffer, originalName, false);
+    try {
+      extracted = await extractFromSpreadsheet(buffer, originalName, false);
+    } catch (xlsErr) {
+      try {
+        extracted = await extractFromDocx(buffer, originalName);
+      } catch {
+        throw xlsErr;
+      }
+    }
   } else if (['.csv', '.tsv'].includes(ext)) {
     extracted = await extractFromSpreadsheet(buffer, originalName, true);
   } else if (['.txt', '.md', '.markdown', '.json', '.html', '.xml', '.log', '.tex'].includes(ext) || mimeType?.startsWith('text/')) {

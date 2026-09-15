@@ -40,6 +40,7 @@ import {
   generateClientSummaryFallback,
   generateDefaultOverview,
   isPrintablePlainText,
+  extractClientSideFallback,
 } from './utils/textExtractor';
 import {
   Compass,
@@ -399,6 +400,8 @@ export default function App() {
     setCurrentFileTitle(file.name);
     setStage('reading');
 
+    let doc: ExtractedDocument | null = null;
+
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -409,36 +412,36 @@ export default function App() {
         body: formData,
       });
 
-      if (!extractRes.ok) {
+      if (extractRes.ok) {
+        doc = await extractRes.json();
+      } else {
         const errData = await extractRes.json().catch(() => ({}));
         const serverError = errData.error || "I couldn't extract readable text from this document.";
 
-        // If file is plain text format and server had an issue, safely attempt client text reading
-        const isLikelyTextFormat = /\.(txt|md|markdown|csv|tsv|json|html|xml|log|tex)$/i.test(file.name);
-        if (isLikelyTextFormat) {
-          try {
-            const clientText = await file.text();
-            if (isPrintablePlainText(clientText) && clientText.trim().length > 10) {
-              const clientDoc = extractTextClientSide(clientText, file.name.replace(/\.[^/.]+$/, ''));
-              setExtractedDoc(clientDoc);
-              setStage('organizing');
-              await runSummarizeAndVerify(clientDoc);
-              return;
-            }
-          } catch {}
+        // Resilient browser-side extraction fallback
+        try {
+          doc = await extractClientSideFallback(file);
+        } catch {
+          throw new Error(serverError);
         }
-        throw new Error(serverError);
       }
+    } catch (serverErr: any) {
+      if (!doc) {
+        try {
+          doc = await extractClientSideFallback(file);
+        } catch (clientErr: any) {
+          console.error('File process error:', serverErr);
+          setErrorMessage(serverErr?.message || clientErr?.message || 'Failed to process file. Please ensure the file is not empty or corrupted.');
+          setStage('idle');
+          return;
+        }
+      }
+    }
 
-      const doc: ExtractedDocument = await extractRes.json();
+    if (doc) {
       setExtractedDoc(doc);
       setStage('organizing');
-
       await runSummarizeAndVerify(doc);
-    } catch (err: any) {
-      console.error('File process error:', err);
-      setErrorMessage(err.message || 'Failed to process file. Please ensure the file is not empty or corrupted.');
-      setStage('idle');
     }
   };
 

@@ -1,4 +1,6 @@
 import { ExtractedDocument, DocumentSection, SummaryResult, DocumentOverview } from '../types';
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 /**
  * Validates whether raw text is authentic printable plain text rather than unparsed binary archives.
@@ -18,11 +20,163 @@ export function isPrintablePlainText(text: string): boolean {
 
   // Count recognizable linguistic and numeric characters (all alphabets & numbers)
   const lettersAndDigits = cleaned.slice(0, 2000).match(/[\p{L}\p{N}]/gu) || [];
-  if (lettersAndDigits.length >= 5) {
+  if (lettersAndDigits.length >= 2) {
     return true;
   }
 
   return false;
+}
+
+/**
+ * Extracts structured document data from Excel or CSV directly in the client browser.
+ */
+export function extractSpreadsheetClientSide(data: ArrayBuffer, fileName: string): ExtractedDocument {
+  const title = fileName.replace(/\.[^/.]+$/, '');
+  const isCsv = /\.csv$/i.test(fileName);
+  const workbook = XLSX.read(new Uint8Array(data), {
+    type: 'array',
+    cellDates: true,
+    raw: false,
+    dateNF: 'yyyy-mm-dd',
+  });
+
+  const sections: DocumentSection[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const csvContent = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    if (!csvContent || !csvContent.trim()) continue;
+
+    const rawLines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter((l) => {
+      return l && /[^\s,;\t"]/.test(l);
+    });
+
+    if (rawLines.length === 0) continue;
+
+    if (rawLines.length === 1) {
+      const label = workbook.SheetNames.length > 1 ? `Sheet "${sheetName}"` : 'Sheet Content';
+      const content = `[${sheetName}]\n${rawLines[0]}`;
+      sections.push({
+        id: `sheet-${sheetName}-r1`,
+        label,
+        content,
+        wordCount: content.split(/\s+/).filter(Boolean).length,
+      });
+      continue;
+    }
+
+    const headers = rawLines[0];
+    const dataRows = rawLines.slice(1);
+    const chunkSize = 50;
+
+    for (let r = 0; r < dataRows.length; r += chunkSize) {
+      const chunkRows = dataRows.slice(r, r + chunkSize);
+      const startRow = r + 2;
+      const endRow = r + 1 + chunkRows.length;
+      const label =
+        workbook.SheetNames.length > 1
+          ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
+          : `Rows ${startRow}-${endRow}`;
+
+      const content = `Columns: ${headers}\nData:\n` + chunkRows.join('\n');
+      sections.push({
+        id: `sheet-${sheetName}-r${startRow}`,
+        label,
+        content,
+        wordCount: content.split(/\s+/).filter(Boolean).length,
+      });
+    }
+  }
+
+  if (sections.length === 0) {
+    throw new Error(`Could not extract readable tabular rows from spreadsheet: ${fileName}`);
+  }
+
+  const fullText = sections.map((s) => `[${s.label}]\n${s.content}`).join('\n\n');
+  return {
+    title,
+    fileType: isCsv ? 'csv' : 'xlsx',
+    sections,
+    fullText,
+    totalWords: Math.max(fullText.split(/\s+/).filter(Boolean).length, 1),
+    totalCharacters: fullText.length,
+  };
+}
+
+/**
+ * Extracts structured document data from DOCX directly in the browser via JSZip XML parsing.
+ */
+export async function extractDocxClientSide(data: ArrayBuffer, fileName: string): Promise<ExtractedDocument> {
+  const title = fileName.replace(/\.[^/.]+$/, '');
+  const zip = await JSZip.loadAsync(data);
+  const docFile = zip.file('word/document.xml');
+
+  if (!docFile) {
+    throw new Error(`No document.xml found inside Word file: ${fileName}`);
+  }
+
+  const xmlContent = await docFile.async('text');
+
+  // Format paragraphs, tabs, breaks
+  const withLineBreaks = xmlContent
+    .replace(/<\/w:p>/gi, '\n\n')
+    .replace(/<w:br[^>]*\/>/gi, '\n')
+    .replace(/<w:tab[^>]*\/>/gi, '\t')
+    .replace(/<\/w:tr>/gi, '\n')
+    .replace(/<\/w:tc>/gi, ' | ');
+
+  const textOnly = withLineBreaks
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .trim();
+
+  if (!textOnly || !isPrintablePlainText(textOnly)) {
+    throw new Error(`Could not extract readable text from Word file: ${fileName}`);
+  }
+
+  return extractTextClientSide(textOnly, title);
+}
+
+/**
+ * Universal browser-side fallback extractor for zero-failure resilience.
+ */
+export async function extractClientSideFallback(file: File): Promise<ExtractedDocument> {
+  const name = file.name.toLowerCase();
+
+  // 1. Spreadsheet
+  if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || name.endsWith('.tsv')) {
+    const arrayBuffer = await file.arrayBuffer();
+    return extractSpreadsheetClientSide(arrayBuffer, file.name);
+  }
+
+  // 2. Word document
+  if (name.endsWith('.docx') || name.endsWith('.doc')) {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      return await extractDocxClientSide(arrayBuffer, file.name);
+    } catch {
+      // If JSZip failed (e.g. legacy binary .doc), try text decoding
+      const text = await file.text();
+      if (isPrintablePlainText(text) && text.trim().length > 10) {
+        return extractTextClientSide(text, file.name.replace(/\.[^/.]+$/, ''));
+      }
+      throw new Error(`Could not parse Word document: ${file.name}`);
+    }
+  }
+
+  // 3. Plain text / Markdown / HTML / JSON / CSV
+  const text = await file.text();
+  if (isPrintablePlainText(text)) {
+    return extractTextClientSide(text, file.name.replace(/\.[^/.]+$/, ''));
+  }
+
+  throw new Error(`Cannot extract readable text from file: ${file.name}`);
 }
 
 /**

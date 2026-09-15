@@ -22,7 +22,7 @@ import {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
 async function startServer() {
@@ -46,7 +46,19 @@ async function startServer() {
   });
 
   // Extract from uploaded file
-  app.post("/api/extract-file", upload.single("file") as any, async (req: any, res) => {
+  app.post("/api/extract-file", (req: any, res: any, next: any) => {
+    upload.single("file")(req, res, (err: any) => {
+      if (err) {
+        console.error("Multer upload error:", err);
+        return res.status(400).json({
+          error: err.code === 'LIMIT_FILE_SIZE'
+            ? 'The uploaded file exceeds the 50MB size limit. Please upload a smaller file.'
+            : (err.message || 'Error receiving uploaded file.')
+        });
+      }
+      next();
+    });
+  }, async (req: any, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file was uploaded." });
