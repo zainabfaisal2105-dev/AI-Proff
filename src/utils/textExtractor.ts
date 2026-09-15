@@ -1,28 +1,28 @@
 import { ExtractedDocument, DocumentSection, SummaryResult, DocumentOverview } from '../types';
 
 /**
- * Validates whether raw text is authentic printable plain text rather than binary data.
+ * Validates whether raw text is authentic printable plain text rather than unparsed binary archives.
  */
 export function isPrintablePlainText(text: string): boolean {
   if (!text || typeof text !== 'string') return false;
-  const sample = text.slice(0, 4000);
-  if (sample.includes('\0')) return false;
-  if (sample.startsWith('%PDF-') || sample.startsWith('PK\x03\x04') || sample.startsWith('{\\rtf')) return false;
+  const cleaned = text.replace(/\0/g, '').replace(/[\x01-\x08\x0B\x0E-\x1F]/g, ' ').trim();
+  if (cleaned.length === 0) return false;
 
-  // Count control characters (excluding newline, cr, tab) and Unicode replacement chars
-  let nonPrintable = 0;
-  for (let i = 0; i < sample.length; i++) {
-    const code = sample.charCodeAt(i);
-    if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 0xfffd) {
-      nonPrintable++;
-    }
-  }
-
-  // If more than 5% is non-printable or replacement chars, it's binary
-  if (sample.length > 50 && nonPrintable / sample.length > 0.05) {
+  // Reject raw unparsed archive headers
+  if (cleaned.startsWith('PK\x03\x04') || cleaned.startsWith('\xD0\xCF\x11\xE0') || cleaned.startsWith('7z\xBC\xAF\x27\x1C')) {
     return false;
   }
-  return true;
+  if (cleaned.startsWith('%PDF-') && cleaned.length < 500 && cleaned.includes('stream')) {
+    return false;
+  }
+
+  // Count recognizable linguistic and numeric characters (all alphabets & numbers)
+  const lettersAndDigits = cleaned.slice(0, 2000).match(/[\p{L}\p{N}]/gu) || [];
+  if (lettersAndDigits.length >= 5) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -30,7 +30,12 @@ export function isPrintablePlainText(text: string): boolean {
  * Guarantees zero-failure, instant processing without network dependencies.
  */
 export function extractTextClientSide(rawText: string, title = 'Document'): ExtractedDocument {
-  const cleanText = (rawText || '').trim();
+  const cleanText = (rawText || '')
+    .replace(/\0/g, '')
+    .replace(/\f/g, '\n\n')
+    .replace(/[\x01-\x08\x0B\x0E-\x1F]/g, ' ')
+    .trim();
+
   if (!cleanText) {
     throw new Error('The provided text is empty. Please enter or paste valid document content.');
   }

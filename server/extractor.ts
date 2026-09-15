@@ -24,45 +24,51 @@ export interface ExtractedDocument {
 }
 
 /**
- * Validates whether a text string contains binary data, ZIP headers, or unreadable mojibake.
- * Prevents raw binary streams (such as "PK\uFFFD\uFFFD\uFFFD...") from being treated as text.
+ * Thoroughly sanitizes extracted text:
+ * 1. Strips binary null bytes (\0).
+ * 2. Normalizes page breaks (\f) to clean newlines.
+ * 3. Removes non-printable ASCII control characters (0-8, 11, 14-31).
+ * 4. Cleans isolated Unicode replacement characters (0xFFFD) into spaces.
+ * 5. Normalizes carriage returns and spacing while preserving paragraphs.
+ */
+export function sanitizeText(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/\0/g, '')
+    .replace(/\f/g, '\n\n')
+    .replace(/[\x01-\x08\x0B\x0E-\x1F]/g, ' ')
+    .replace(/\uFFFD+/g, ' ')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+}
+
+/**
+ * Validates whether a text string contains actual un-extracted binary data (e.g. raw ZIP or ELF headers).
+ * Guarantees that legitimate documents containing mathematical formulas, foreign characters,
+ * quotes, symbols, or exam questions are NEVER falsely flagged.
  */
 export function isBinaryOrGarbageText(text: string): boolean {
   if (!text || typeof text !== 'string') return true;
+  const sanitized = sanitizeText(text);
+  if (sanitized.length === 0) return true;
 
-  // Check for common binary archive signatures in string form
-  if (text.startsWith('PK\x03\x04') || text.startsWith('PK\x05\x06') || text.startsWith('PK\x07\x08')) return true;
-  if (text.startsWith('PK\uFFFD\uFFFD') || text.startsWith('PK!')) return true;
-  if (text.startsWith('%PDF-') && text.includes('\x00')) return true;
-  if (text.startsWith('\xD0\xCF\x11\xE0')) return true;
-  if (text.startsWith('7z\xBC\xAF\x27\x1C')) return true;
+  // Check for raw un-extracted binary archive/executable signatures
+  if (sanitized.startsWith('PK\x03\x04') || sanitized.startsWith('PK\x05\x06') || sanitized.startsWith('PK\x07\x08')) return true;
+  if (sanitized.startsWith('\xD0\xCF\x11\xE0') || sanitized.startsWith('7z\xBC\xAF\x27\x1C') || sanitized.startsWith('\x7FELF')) return true;
+  if (sanitized.startsWith('%PDF-') && sanitized.length < 500 && sanitized.includes('stream')) return true;
 
-  // Binary null bytes are never part of clean plain document text
-  if (text.includes('\x00')) return true;
+  // Count recognizable linguistic and numeric characters (supports all scripts: Latin, Arabic, CJK, Cyrillic, Greek, etc.)
+  const lettersAndDigits = sanitized.match(/[\p{L}\p{N}]/gu) || [];
 
-  // Inspect character distribution in sample
-  const sample = text.slice(0, 4000);
-  if (sample.length === 0) return true;
-
-  let replacementCount = 0;
-  let controlCount = 0;
-
-  for (let i = 0; i < sample.length; i++) {
-    const code = sample.charCodeAt(i);
-    if (code === 0xFFFD) {
-      replacementCount++;
-    } else if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || (code >= 127 && code <= 159)) {
-      controlCount++;
-    }
+  // If the document contains at least 6 alphanumeric or linguistic characters, it is valid readable text!
+  if (lettersAndDigits.length >= 6) {
+    return false;
   }
 
-  // More than 3 Unicode replacement characters or > 0.5% indicates decoded binary
-  if (replacementCount > 3 || replacementCount / sample.length > 0.005) return true;
-
-  // High proportion of non-printable control characters indicates binary
-  if (controlCount / sample.length > 0.04) return true;
-
-  return false;
+  return true;
 }
 
 /**
@@ -173,9 +179,12 @@ export async function extractFromPdf(buffer: Buffer, originalName: string): Prom
               ],
             });
 
-            if (res.text && res.text.trim().length > 30 && !isBinaryOrGarbageText(res.text)) {
-              text = res.text.trim();
-              break;
+            if (res.text && res.text.trim().length > 10) {
+              const sanitizedOcr = sanitizeText(res.text);
+              if (!isBinaryOrGarbageText(sanitizedOcr)) {
+                text = sanitizedOcr;
+                break;
+              }
             }
           } catch (mErr: any) {
             console.warn(`Gemini OCR model ${modelName} attempt:`, mErr?.message || mErr);
@@ -205,7 +214,7 @@ export async function extractFromPdf(buffer: Buffer, originalName: string): Prom
         } catch {}
       }
       if (pieces.length > 0) {
-        const candidate = pieces.join(' ').replace(/\s+/g, ' ').trim();
+        const candidate = sanitizeText(pieces.join(' '));
         if (!isBinaryOrGarbageText(candidate)) {
           text = candidate;
         }
@@ -223,15 +232,17 @@ export async function extractFromPdf(buffer: Buffer, originalName: string): Prom
       (w) => !w.startsWith('/') && !w.startsWith('<<') && !w.startsWith('xref') && !w.startsWith('obj')
     );
     if (filtered.length > 0) {
-      const candidate = filtered.join(' ').replace(/\s+/g, ' ').trim();
+      const candidate = sanitizeText(filtered.join(' '));
       if (!isBinaryOrGarbageText(candidate)) {
         text = candidate;
       }
     }
   }
 
+  text = sanitizeText(text);
+
   if (!text.trim() || isBinaryOrGarbageText(text)) {
-    throw new Error(`Could not extract readable text from PDF "${originalName}". The PDF may be image-only, corrupted, or password-protected.`);
+    throw new Error(`Could not extract readable text from PDF "${originalName}". The PDF may be empty, image-only without OCR access, or password-protected.`);
   }
 
   // If pages were not captured per-page earlier, chunk into logical sections
@@ -374,6 +385,48 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
       if (extractedPieces.length > 0) {
         rawText = extractedPieces.join('\n\n');
       }
+
+      // If document still has very few words, check for embedded image scans inside word/media/
+      if ((!rawText.trim() || rawText.split(/\s+/).filter(Boolean).length < 15)) {
+        const mediaFiles = Object.keys(zip.files).filter(
+          (f) => f.startsWith('word/media/') && (f.endsWith('.png') || f.endsWith('.jpeg') || f.endsWith('.jpg') || f.endsWith('.webp'))
+        );
+        if (mediaFiles.length > 0) {
+          const ai = getGemini();
+          if (ai) {
+            const ocrPieces: string[] = [];
+            for (const mf of mediaFiles.slice(0, 10)) {
+              const imgFile = zip.file(mf);
+              if (imgFile) {
+                const imgBuf = await imgFile.async('nodebuffer');
+                const mime = mf.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                try {
+                  const imgRes = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: [
+                      {
+                        role: 'user',
+                        parts: [
+                          { inlineData: { mimeType: mime, data: imgBuf.toString('base64') } },
+                          { text: 'Transcribe all visible text, questions, and content from this image verbatim.' },
+                        ],
+                      },
+                    ],
+                  });
+                  if (imgRes.text && imgRes.text.trim().length > 5) {
+                    ocrPieces.push(sanitizeText(imgRes.text));
+                  }
+                } catch (imgErr) {
+                  console.warn(`Docx image OCR failed for ${mf}:`, imgErr);
+                }
+              }
+            }
+            if (ocrPieces.length > 0) {
+              rawText = (rawText ? rawText + '\n\n' : '') + ocrPieces.join('\n\n');
+            }
+          }
+        }
+      }
     } catch (zipErr) {
       console.warn('DOCX zip XML fallback failed:', zipErr);
     }
@@ -393,7 +446,7 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
       }
     }
     if (utf16Runs.length > 0) {
-      const candidate = utf16Runs.join(' ').replace(/\s+/g, ' ').trim();
+      const candidate = sanitizeText(utf16Runs.join(' '));
       if (!isBinaryOrGarbageText(candidate)) {
         rawText = candidate;
       }
@@ -405,11 +458,13 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
     const raw = buffer.toString('latin1');
     const words = raw.match(/[\x20-\x7E\t\n\r]{4,}/g) || [];
     const filtered = words.filter((w) => !w.startsWith('/') && !w.startsWith('<<') && !w.startsWith('PK'));
-    const candidate = filtered.join(' ').replace(/\s+/g, ' ').trim();
+    const candidate = sanitizeText(filtered.join(' '));
     if (candidate && !isBinaryOrGarbageText(candidate)) {
       rawText = candidate;
     }
   }
+
+  rawText = sanitizeText(rawText);
 
   // Guard: NEVER return binary garbage or empty text
   if (!rawText.trim() || isBinaryOrGarbageText(rawText)) {
@@ -782,9 +837,9 @@ export async function extractFromSpreadsheet(buffer: Buffer, originalName: strin
 }
 
 export function extractFromText(rawText: string, title = 'Document'): ExtractedDocument {
-  const clean = (rawText || '').trim();
+  const clean = sanitizeText(rawText);
   if (!clean || isBinaryOrGarbageText(clean)) {
-    throw new Error(`Document "${title}" contains unreadable binary data or is empty.`);
+    throw new Error(`Document "${title}" contains unreadable data or is empty.`);
   }
 
   const sections: DocumentSection[] = [];
@@ -835,6 +890,76 @@ export function extractFromText(rawText: string, title = 'Document'): ExtractedD
 }
 
 /**
+ * Extracts text and data from image files (PNG, JPG, JPEG, WEBP, BMP, TIFF) using Gemini Multimodal OCR.
+ * Accurately transcribes tests, quizzes, exam papers, scanned questions, and tables verbatim.
+ */
+export async function extractFromImage(
+  buffer: Buffer,
+  originalName: string,
+  mimeType?: string
+): Promise<ExtractedDocument> {
+  const ai = getGemini();
+  if (!ai) {
+    throw new Error('AI extraction service is not configured. Please ensure GEMINI_API_KEY is available.');
+  }
+
+  const ext = (originalName ? originalName.slice(originalName.lastIndexOf('.')) : '').toLowerCase();
+  let detectedMime = mimeType;
+  if (!detectedMime || !detectedMime.startsWith('image/')) {
+    if (ext === '.png') detectedMime = 'image/png';
+    else if (ext === '.webp') detectedMime = 'image/webp';
+    else if (ext === '.gif') detectedMime = 'image/gif';
+    else detectedMime = 'image/jpeg';
+  }
+
+  const base64Data = buffer.toString('base64');
+  let transcribed = '';
+  const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+
+  for (const modelName of candidateModels) {
+    try {
+      const res = await ai.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  mimeType: detectedMime,
+                  data: base64Data,
+                },
+              },
+              {
+                text: 'Carefully transcribe all visible text, questions, options, headings, numbers, tables, and content from this document/image verbatim. Do not summarize or skip anything. Format with clear headings for any sections or questions.',
+              },
+            ],
+          },
+        ],
+      });
+
+      if (res.text && res.text.trim().length > 0) {
+        const cleaned = sanitizeText(res.text);
+        if (!cleaned.startsWith('NO_TEXT') && !isBinaryOrGarbageText(cleaned)) {
+          transcribed = cleaned;
+          break;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`Gemini image OCR model ${modelName} attempt:`, err?.message || err);
+    }
+  }
+
+  if (!transcribed || isBinaryOrGarbageText(transcribed)) {
+    throw new Error(`Could not detect readable text in "${originalName}". Please ensure the image or test is clear and legible.`);
+  }
+
+  const extracted = extractFromText(transcribed, originalName);
+  extracted.fileType = 'image';
+  return extracted;
+}
+
+/**
  * Universal document buffer extractor with magic byte detection, format routing,
  * and strict binary/garbage verification.
  */
@@ -849,30 +974,66 @@ export async function extractDocumentBuffer(
 
   const ext = (originalName ? originalName.slice(originalName.lastIndexOf('.')) : '').toLowerCase();
 
-  // 1. Magic byte detection
-  // PDF: %PDF- (0x25 0x50 0x44 0x46)
-  const isPdf = buffer.length >= 4 &&
-    buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+  // 1. Magic byte & image signature detection
+  const pdfMagicIndex = buffer.indexOf(Buffer.from('%PDF-'));
+  const isPdf = (pdfMagicIndex !== -1 && pdfMagicIndex < 2048) || ext === '.pdf' || mimeType === 'application/pdf';
+
+  const isJpeg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isPng = buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+  const isWebp = buffer.length >= 12 && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && buffer.slice(8, 12).toString() === 'WEBP';
+  const isBmp = buffer.length >= 2 && buffer[0] === 0x42 && buffer[1] === 0x4d;
+  const isGif = buffer.length >= 3 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+  const isImage = isJpeg || isPng || isWebp || isBmp || isGif ||
+    ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'].includes(ext) ||
+    (mimeType ? mimeType.startsWith('image/') : false);
 
   // ZIP / OpenXML: PK\x03\x04 or PK\x05\x06 or PK\x07\x08
   const isZip = buffer.length >= 4 &&
-    buffer[0] === 0x50 && buffer[1] === 0x4B &&
+    buffer[0] === 0x50 && buffer[1] === 0x4b &&
     ((buffer[2] === 0x03 && buffer[3] === 0x04) ||
       (buffer[2] === 0x05 && buffer[3] === 0x06) ||
       (buffer[2] === 0x07 && buffer[3] === 0x08));
 
   // OLE2 (Compound Document): 0xD0 0xCF 0x11 0xE0
   const isOle2 = buffer.length >= 4 &&
-    buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0;
+    buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 && buffer[3] === 0xe0;
 
   // RTF: {\rtf
   const isRtf = buffer.length >= 5 &&
-    buffer[0] === 0x7B && buffer[1] === 0x5C && buffer[2] === 0x72 && buffer[3] === 0x74 && buffer[4] === 0x66;
+    buffer[0] === 0x7b && buffer[1] === 0x5c && buffer[2] === 0x72 && buffer[3] === 0x74 && buffer[4] === 0x66;
 
   let extracted: ExtractedDocument;
 
-  if (isPdf || ext === '.pdf' || mimeType === 'application/pdf') {
-    extracted = await extractFromPdf(buffer, originalName);
+  if (isImage) {
+    extracted = await extractFromImage(buffer, originalName, mimeType);
+  } else if (isPdf) {
+    try {
+      extracted = await extractFromPdf(buffer, originalName);
+    } catch (pdfErr: any) {
+      console.warn('extractFromPdf failed, trying direct Gemini OCR:', pdfErr?.message || pdfErr);
+      const ai = getGemini();
+      if (ai) {
+        const ocrRes = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: 'application/pdf', data: buffer.toString('base64') } },
+                { text: 'Extract and transcribe all text, questions, and content from this document verbatim.' },
+              ],
+            },
+          ],
+        });
+        if (ocrRes.text && ocrRes.text.trim().length > 10) {
+          extracted = extractFromText(ocrRes.text, originalName);
+        } else {
+          throw pdfErr;
+        }
+      } else {
+        throw pdfErr;
+      }
+    }
   } else if (isZip) {
     // Inspect zip to determine exact Office / OpenDoc format
     try {
@@ -924,25 +1085,46 @@ export async function extractDocumentBuffer(
   } else if (['.csv', '.tsv'].includes(ext)) {
     extracted = await extractFromSpreadsheet(buffer, originalName, true);
   } else if (['.txt', '.md', '.markdown', '.json', '.html', '.xml', '.log', '.tex'].includes(ext) || mimeType?.startsWith('text/')) {
-    const text = buffer.toString('utf-8');
+    let text = sanitizeText(buffer.toString('utf-8'));
     if (isBinaryOrGarbageText(text)) {
-      throw new Error(`The file "${originalName}" contains unreadable binary data.`);
+      const latinText = sanitizeText(buffer.toString('latin1'));
+      if (!isBinaryOrGarbageText(latinText)) {
+        text = latinText;
+      }
     }
     extracted = extractFromText(text, originalName);
   } else {
-    // Attempt decoding as UTF-8 for unknown extensions
-    const rawUtf8 = buffer.toString('utf-8');
+    // Attempt decoding as UTF-8 or Latin-1 text
+    const rawUtf8 = sanitizeText(buffer.toString('utf-8'));
     if (!isBinaryOrGarbageText(rawUtf8) && rawUtf8.trim().length > 0) {
       extracted = extractFromText(rawUtf8, originalName);
     } else {
-      throw new Error(
-        `Unsupported or unreadable file format for "${originalName}". Please upload a PDF, Word document (DOCX/DOC), PowerPoint (PPTX), Excel sheet (XLSX/CSV), or plain text file.`
-      );
+      const rawLatin = sanitizeText(buffer.toString('latin1'));
+      if (!isBinaryOrGarbageText(rawLatin) && rawLatin.trim().length > 0) {
+        extracted = extractFromText(rawLatin, originalName);
+      } else {
+        // Attempt image OCR fallback in case it's an unrecognized image format
+        try {
+          extracted = await extractFromImage(buffer, originalName, mimeType);
+        } catch {
+          throw new Error(
+            `Unsupported or unreadable file format for "${originalName}". Please upload a PDF, Word document (DOCX/DOC), Image (PNG/JPG), PowerPoint (PPTX), Excel sheet (XLSX/CSV), or plain text file.`
+          );
+        }
+      }
     }
   }
 
-  // CRITICAL FINAL VALIDATION:
-  // Ensure the extracted document contains clean readable text and not binary gibberish!
+  // Sanitize all extracted sections and fullText
+  extracted.fullText = sanitizeText(extracted.fullText);
+  if (extracted.sections) {
+    extracted.sections = extracted.sections.map((s) => ({
+      ...s,
+      content: sanitizeText(s.content),
+      wordCount: sanitizeText(s.content).split(/\s+/).filter(Boolean).length,
+    }));
+  }
+
   if (!extracted || !extracted.fullText || extracted.fullText.trim().length === 0) {
     throw new Error(`Could not extract readable text from "${originalName}". The document appears to be empty.`);
   }
