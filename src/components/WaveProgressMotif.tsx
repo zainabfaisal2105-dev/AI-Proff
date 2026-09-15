@@ -17,7 +17,8 @@ export const WaveProgressMotif: React.FC<WaveProgressMotifProps> = ({
   className = '',
   showLabels = false,
 }) => {
-  const normProgress = Math.min(100, Math.max(0, progress));
+  const safeProgress = typeof progress === 'number' && !Number.isNaN(progress) ? progress : 0;
+  const normProgress = Math.min(100, Math.max(0, safeProgress));
 
   return (
     <div className={`relative overflow-hidden rounded-[16px] clay-well p-[4px] ${className}`}>

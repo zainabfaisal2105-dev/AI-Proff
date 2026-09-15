@@ -106,6 +106,7 @@ export const CheckerCard: React.FC<CheckerCardProps> = ({
         </div>
 
         <DonutRing
+          progress={score}
           value={score}
           max={100}
           size={64}

@@ -178,9 +178,10 @@ export const SavedSessionsModal: React.FC<SavedSessionsModalProps> = ({
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-[12px]">
                   {sessions.map((session) => {
-                    const totalSections = session.sectionCount || session.extractedDoc?.sections?.length || 1;
+                    const totalSections = Math.max(1, session.sectionCount || session.extractedDoc?.sections?.length || 1);
                     const visitedCount = session.visitedSectionIds?.length || 1;
-                    const pctRead = Math.round((visitedCount / totalSections) * 100);
+                    const rawPct = Math.round((visitedCount / totalSections) * 100);
+                    const pctRead = Number.isNaN(rawPct) ? 0 : Math.min(100, Math.max(0, rawPct));
 
                     return (
                       <div

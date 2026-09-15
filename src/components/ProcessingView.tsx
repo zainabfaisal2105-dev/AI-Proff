@@ -59,12 +59,13 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ stage, fileName 
         {/* Donut Progress Ring with percentage */}
         <div className="flex flex-col items-center justify-center space-y-[12px]">
           <DonutRing
+            progress={pct}
             value={pct}
             max={100}
             size={90}
             strokeWidth={8}
             color="#D9924D"
-            label="progress"
+            showLabel
           />
 
           <div className="space-y-[4px]">
