@@ -401,6 +401,7 @@ export default function App() {
     setStage('reading');
 
     let doc: ExtractedDocument | null = null;
+    let extractError: string | null = null;
 
     try {
       const formData = new FormData();
@@ -415,34 +416,47 @@ export default function App() {
       if (extractRes.ok) {
         doc = await extractRes.json();
       } else {
-        const errData = await extractRes.json().catch(() => ({}));
-        const serverError = errData.error || "I couldn't extract readable text from this document.";
-
-        // Resilient browser-side extraction fallback
+        const errJson = await extractRes.json().catch(() => ({}));
+        extractError = errJson.error || null;
+        // Attempt client fallback only if file is not obviously corrupted
         try {
           doc = await extractClientSideFallback(file);
-        } catch {
-          throw new Error(serverError);
+        } catch (clientErr: any) {
+          throw new Error(extractError || clientErr.message || 'Could not read this file properly.');
         }
       }
-    } catch (serverErr: any) {
+    } catch (err: any) {
       if (!doc) {
         try {
           doc = await extractClientSideFallback(file);
         } catch (clientErr: any) {
-          console.error('File process error:', serverErr);
-          setErrorMessage(serverErr?.message || clientErr?.message || 'Failed to process file. Please ensure the file is not empty or corrupted.');
+          console.error('File process error:', clientErr);
+          setErrorMessage(extractError || err.message || clientErr.message || 'Could not read this file properly. Please ensure the document is not corrupted, encrypted, or empty.');
           setStage('idle');
+          setExtractedDoc(null);
+          setSummary(null);
+          setOverview(null);
+          setVerification(null);
           return;
         }
       }
     }
 
-    if (doc) {
-      setExtractedDoc(doc);
-      setStage('organizing');
-      await runSummarizeAndVerify(doc);
+    // Quality gate validation: reject unreadable, garbage, or raw archive texts
+    if (!doc || !doc.fullText || !isPrintablePlainText(doc.fullText)) {
+      setErrorMessage(extractError || 'Could not read this file properly. Please ensure the document is not corrupted, encrypted, or empty.');
+      setStage('idle');
+      setExtractedDoc(null);
+      setSummary(null);
+      setOverview(null);
+      setVerification(null);
+      return;
     }
+
+    setErrorMessage(null);
+    setExtractedDoc(doc);
+    setStage('organizing');
+    await runSummarizeAndVerify(doc);
   };
 
   // Process Web URL
@@ -591,13 +605,21 @@ export default function App() {
           id: `err_${Date.now()}`,
           sender: 'assistant',
           timestamp: Date.now(),
-          content: 'I encountered an error retrieving grounded information for this question.',
-          answerability: 'not_supported',
+          content: 'Unable to retrieve grounded response due to a technical error. Please try again.',
+          isError: true,
         };
         setChatHistory([...updatedHistory, errorMsg]);
       }
     } catch (err) {
       console.error('Chat error:', err);
+      const errorMsg: ChatMessage = {
+        id: `err_${Date.now()}`,
+        sender: 'assistant',
+        timestamp: Date.now(),
+        content: 'Unable to retrieve grounded response due to a network error. Please try again.',
+        isError: true,
+      };
+      setChatHistory([...updatedHistory, errorMsg]);
     } finally {
       setIsChatLoading(false);
     }

@@ -45,30 +45,126 @@ export function sanitizeText(text: string): string {
     .trim();
 }
 
+export interface ExtractionQuality {
+  isValid: boolean;
+  garbageRatio: number;
+  meaningfulChars: number;
+  hasZipOrXmlMarkers: boolean;
+  reason?: string;
+}
+
 /**
- * Validates whether a text string contains actual un-extracted binary data (e.g. raw ZIP or ELF headers).
- * Guarantees that legitimate documents containing mathematical formulas, foreign characters,
- * quotes, symbols, or exam questions are NEVER falsely flagged.
+ * Computes extraction quality metrics and validates readable plain text:
+ * 1. Rejects raw zip / OpenXML binary archive markers ([Content_Types].xml, PK, ppt/slides/, word/document.xml, etc.).
+ * 2. Checks garbage ratio: proportion of characters that are \uFFFD, control characters, or non-linguistic/symbol bytes.
+ * 3. Enforces minimum meaningful character threshold (>= 50 alphanumeric characters).
  */
-export function isBinaryOrGarbageText(text: string): boolean {
-  if (!text || typeof text !== 'string') return true;
+export function evaluateExtractionQuality(text: string): ExtractionQuality {
+  if (!text || typeof text !== 'string') {
+    return { isValid: false, garbageRatio: 1, meaningfulChars: 0, hasZipOrXmlMarkers: false, reason: 'Empty text' };
+  }
   const sanitized = sanitizeText(text);
-  if (sanitized.length === 0) return true;
-
-  // Check for raw un-extracted binary archive/executable signatures
-  if (sanitized.startsWith('PK\x03\x04') || sanitized.startsWith('PK\x05\x06') || sanitized.startsWith('PK\x07\x08')) return true;
-  if (sanitized.startsWith('\xD0\xCF\x11\xE0') || sanitized.startsWith('7z\xBC\xAF\x27\x1C') || sanitized.startsWith('\x7FELF')) return true;
-  if (sanitized.startsWith('%PDF-') && sanitized.length < 500 && sanitized.includes('stream')) return true;
-
-  // Count recognizable linguistic and numeric characters (supports all scripts: Latin, Arabic, CJK, Cyrillic, Greek, etc.)
-  const lettersAndDigits = sanitized.match(/[\p{L}\p{N}]/gu) || [];
-
-  // If the document contains any alphanumeric or linguistic characters, it is valid readable text!
-  if (lettersAndDigits.length >= 2) {
-    return false;
+  if (sanitized.length === 0) {
+    return { isValid: false, garbageRatio: 1, meaningfulChars: 0, hasZipOrXmlMarkers: false, reason: 'Empty text after sanitization' };
   }
 
-  return true;
+  // Reject text containing zip/OpenXML markers or raw archive headers
+  const zipMarkers = [
+    '[Content_Types].xml',
+    'ppt/slides/',
+    'ppt/presentation.xml',
+    'word/document.xml',
+    'xl/worksheets/',
+    'xl/sharedStrings.xml',
+    '_rels/.rels',
+    'PK\x03\x04',
+    'PK\x05\x06',
+    'PK\x07\x08',
+    '\xD0\xCF\x11\xE0',
+    '7z\xBC\xAF\x27\x1C',
+    '\x7FELF',
+  ];
+  const hasZipOrXmlMarkers = zipMarkers.some((m) => sanitized.includes(m)) || sanitized.startsWith('PK');
+
+  if (hasZipOrXmlMarkers) {
+    return {
+      isValid: false,
+      garbageRatio: 1,
+      meaningfulChars: 0,
+      hasZipOrXmlMarkers: true,
+      reason: 'Contains raw archive/OpenXML file structures or unparsed zip markers',
+    };
+  }
+
+  // Count meaningful linguistic/numeric characters across all Unicode scripts
+  const lettersAndDigits = sanitized.match(/[\p{L}\p{N}]/gu) || [];
+  const meaningfulChars = lettersAndDigits.length;
+
+  // Compute garbage character count
+  let garbageCount = 0;
+  for (let i = 0; i < sanitized.length; i++) {
+    const char = sanitized[i];
+    const code = sanitized.charCodeAt(i);
+    if (
+      char === '\uFFFD' ||
+      (code < 32 && code !== 9 && code !== 10 && code !== 13) ||
+      (code >= 127 && code <= 159) ||
+      !/[\p{L}\p{N}\p{P}\p{Z}\p{S}\s]/u.test(char)
+    ) {
+      garbageCount++;
+    }
+  }
+
+  const garbageRatio = sanitized.length > 0 ? garbageCount / sanitized.length : 1;
+
+  if (meaningfulChars < 50) {
+    return {
+      isValid: false,
+      garbageRatio,
+      meaningfulChars,
+      hasZipOrXmlMarkers: false,
+      reason: `Insufficient meaningful characters (${meaningfulChars} < 50)`,
+    };
+  }
+
+  if (garbageRatio > 0.10) {
+    return {
+      isValid: false,
+      garbageRatio,
+      meaningfulChars,
+      hasZipOrXmlMarkers: false,
+      reason: `Garbage character ratio too high (${(garbageRatio * 100).toFixed(1)}% > 10%)`,
+    };
+  }
+
+  return {
+    isValid: true,
+    garbageRatio,
+    meaningfulChars,
+    hasZipOrXmlMarkers: false,
+  };
+}
+
+/**
+ * Validates whether a text string contains actual un-extracted binary data or fails the quality gate.
+ */
+export function isBinaryOrGarbageText(text: string): boolean {
+  return !evaluateExtractionQuality(text).isValid;
+}
+
+/**
+ * Unescapes standard XML entities into plain characters.
+ */
+export function decodeXmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 /**
@@ -464,25 +560,38 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
     }
   }
 
-  // 4. Tertiary: Scan for UTF-16LE text sequences (common in Word binary documents)
-  if (!rawText.trim()) {
+  // 4. Tertiary: Robust scan for UTF-16LE text runs across both even and odd byte offsets (Legacy binary .doc only, never for ZIP-based formats)
+  if ((!rawText.trim() || isBinaryOrGarbageText(rawText)) && !isZip && !originalName.toLowerCase().endsWith('.docx')) {
     const utf16Runs: string[] = [];
     const ignoredTokens = new Set([
       'WordDocument', 'Root Entry', 'SummaryInformation', 'DocumentSummaryInformation',
-      'CompObj', 'ObjectPool', 'Data', '1Table', '0Table', 'Normal.dotm', 'Microsoft Word'
+      'CompObj', 'ObjectPool', 'Data', '1Table', '0Table', 'Normal.dotm', 'Microsoft Word',
+      'Content_Types', 'App', 'Core'
     ]);
 
-    for (let i = 0; i < buffer.length - 12; i += 2) {
+    for (const offset of [0, 1]) {
       let run = '';
-      while (i < buffer.length - 1 && buffer[i + 1] === 0x00 && buffer[i] >= 0x20 && buffer[i] <= 0x7E) {
-        run += String.fromCharCode(buffer[i]);
-        i += 2;
+      for (let i = offset; i < buffer.length - 1; i += 2) {
+        const b0 = buffer[i];
+        const b1 = buffer[i + 1];
+        if (b1 === 0x00 && ((b0 >= 0x20 && b0 <= 0x7e) || b0 === 0x09 || b0 === 0x0a || b0 === 0x0d)) {
+          run += String.fromCharCode(b0);
+        } else if (b1 > 0x00 && b1 < 0x20) {
+          run += String.fromCharCode((b1 << 8) | b0);
+        } else {
+          const trimmed = run.trim();
+          if (trimmed.length >= 3 && !ignoredTokens.has(trimmed) && /[\p{L}\p{N}]/u.test(trimmed)) {
+            utf16Runs.push(trimmed);
+          }
+          run = '';
+        }
       }
       const trimmed = run.trim();
-      if (trimmed.length >= 5 && !ignoredTokens.has(trimmed) && /[\p{L}\p{N}]/u.test(trimmed)) {
+      if (trimmed.length >= 3 && !ignoredTokens.has(trimmed) && /[\p{L}\p{N}]/u.test(trimmed)) {
         utf16Runs.push(trimmed);
       }
     }
+
     if (utf16Runs.length > 0) {
       const candidate = sanitizeText(utf16Runs.join('\n\n'));
       if (!isBinaryOrGarbageText(candidate)) {
@@ -491,11 +600,11 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
     }
   }
 
-  // 5. Quaternary: Extract clean Latin / ANSI text runs (for Word 8-bit text streams)
-  if (!rawText.trim()) {
+  // 5. Quaternary: Extract clean Latin / ANSI text runs (Legacy binary .doc only, never for ZIP-based formats)
+  if ((!rawText.trim() || isBinaryOrGarbageText(rawText)) && !isZip && !originalName.toLowerCase().endsWith('.docx')) {
     const raw = buffer.toString('latin1');
-    const words = raw.match(/[\x20-\x7E\t\n\r]{4,}/g) || [];
-    const ignoredPrefixes = ['/', '<<', 'PK', '\xD0\xCF', '7z', '\x7FELF'];
+    const words = raw.match(/[\x20-\x7E\xA0-\xFF\t\n\r]{3,}/g) || [];
+    const ignoredPrefixes = ['/', '<<', 'PK', '\xD0\xCF', '7z', '\x7FELF', '<Types'];
     const ignoredNames = new Set([
       'WordDocument', 'Root Entry', 'SummaryInformation', 'DocumentSummaryInformation',
       'CompObj', 'ObjectPool', 'Microsoft Word', 'Normal.dotm'
@@ -515,22 +624,69 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
   }
 
   // 6. Quinary: If it is an OLE2 file, check if it might be an Excel workbook
-  if (!rawText.trim() && isOle2) {
+  if ((!rawText.trim() || isBinaryOrGarbageText(rawText)) && isOle2) {
     try {
       const spreadsheetDoc = await extractFromSpreadsheet(buffer, originalName, false);
       if (spreadsheetDoc && spreadsheetDoc.sections.length > 0) {
         return spreadsheetDoc;
       }
     } catch {
-      // Ignore and proceed to guard
+      // Continue to AI fallback
+    }
+  }
+
+  // 7. Senary: Gemini AI document transcription fallback for difficult/protected/scanned Word documents
+  if (!rawText.trim() || isBinaryOrGarbageText(rawText) || rawText.split(/\s+/).filter(Boolean).length < 20) {
+    try {
+      const ai = getGemini();
+      if (ai) {
+        const mime = isZip || originalName.toLowerCase().endsWith('.docx')
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : 'application/octet-stream';
+        const aiRes = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: mime,
+                    data: buffer.toString('base64'),
+                  },
+                },
+                {
+                  text: 'Carefully extract and transcribe all visible text, test questions, options, headings, numbers, tables, and content from this document verbatim. Preserve the complete text structure.',
+                },
+              ],
+            },
+          ],
+        });
+        if (aiRes.text && aiRes.text.trim().length > 10) {
+          const aiClean = sanitizeText(aiRes.text);
+          if (!isBinaryOrGarbageText(aiClean)) {
+            rawText = (rawText ? rawText + '\n\n' : '') + aiClean;
+          }
+        }
+      }
+    } catch (aiDocErr) {
+      console.warn('Gemini Word doc transcription fallback notice:', aiDocErr);
     }
   }
 
   rawText = sanitizeText(rawText);
 
-  // Guard: NEVER return binary garbage or empty text
+  // Guard: If still empty, extract all raw words as absolute failsafe (Legacy binary .doc only, never for ZIP-based formats)
+  if ((!rawText.trim() || isBinaryOrGarbageText(rawText)) && !isZip && !originalName.toLowerCase().endsWith('.docx')) {
+    const fallbackWords = buffer.toString('latin1').match(/[\p{L}\p{N}\s.,!?:;'"()-]{3,}/gu) || [];
+    const joined = fallbackWords.map((w) => w.trim()).filter(Boolean).join(' ');
+    if (joined && !isBinaryOrGarbageText(joined)) {
+      rawText = sanitizeText(joined);
+    }
+  }
+
   if (!rawText.trim() || isBinaryOrGarbageText(rawText)) {
-    throw new Error(`Could not extract readable text from "${originalName}". The Word document may be empty, encrypted, or corrupted.`);
+    throw new Error(`Could not read this file properly. Please ensure the Word document "${originalName}" is not corrupted or password-protected.`);
   }
 
   const sections: DocumentSection[] = [];
@@ -583,7 +739,14 @@ export async function extractFromDocx(buffer: Buffer, originalName: string): Pro
 }
 
 /**
- * Extracts text from PowerPoint presentations (.pptx, .ppt).
+ * Extracts text from PowerPoint presentations (.pptx).
+ * Guarantees proper OpenXML slide parsing:
+ * 1. Numerically sorts slide XMLs (slide2 before slide10).
+ * 2. Extracts text from <a:t> nodes grouped per paragraph <a:p>.
+ * 3. Uses the first text of each slide as its title.
+ * 4. Extracts speaker notes from ppt/notesSlides/notesSlide*.xml.
+ * 5. Outputs one section per slide: "Slide N: <title>" followed by bullet text.
+ * 6. Never falls through to printable-byte scanners.
  */
 export async function extractFromPptx(buffer: Buffer, originalName: string): Promise<ExtractedDocument> {
   const sections: DocumentSection[] = [];
@@ -595,7 +758,7 @@ export async function extractFromPptx(buffer: Buffer, originalName: string): Pro
       filename.startsWith('ppt/slides/slide') && filename.endsWith('.xml')
     );
 
-    // Sort slides numerically: slide1.xml, slide2.xml, ...
+    // Sort slides numerically: slide1.xml, slide2.xml, ..., slide10.xml
     slideFiles.sort((a, b) => {
       const numA = parseInt(a.match(/slide(\d+)\.xml/)?.[1] || '0', 10);
       const numB = parseInt(b.match(/slide(\d+)\.xml/)?.[1] || '0', 10);
@@ -606,73 +769,116 @@ export async function extractFromPptx(buffer: Buffer, originalName: string): Pro
 
     for (let i = 0; i < slideFiles.length; i++) {
       const filename = slideFiles[i];
+      const slideNum = parseInt(filename.match(/slide(\d+)\.xml/)?.[1] || String(i + 1), 10);
       const xml = await zip.files[filename].async('text');
-      const matches = xml.match(/<a:t[^>]*>(.*?)<\/a:t>/g) || [];
-      const texts = matches.map((m) => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
 
-      // Also check for speaker notes
-      let notes = '';
-      const notesFile = zip.files[`ppt/notesSlides/notesSlide${i + 1}.xml`];
-      if (notesFile) {
-        const notesXml = await notesFile.async('text');
-        const noteMatches = notesXml.match(/<a:t[^>]*>(.*?)<\/a:t>/g) || [];
-        notes = noteMatches.map((m) => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ');
+      // Group <a:t> text nodes inside each paragraph <a:p>
+      const paragraphMatches = xml.match(/<a:p[^>]*>([\s\S]*?)<\/a:p>/gi) || [];
+      const paragraphs: string[] = [];
+
+      for (const pXml of paragraphMatches) {
+        const textMatches = pXml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi) || [];
+        const pText = textMatches
+          .map((t) => decodeXmlEntities(t.replace(/<[^>]+>/g, '')))
+          .join('')
+          .replace(/[ \t]+/g, ' ')
+          .trim();
+        if (pText) {
+          paragraphs.push(pText);
+        }
       }
 
-      const slideContent = [texts.join(' '), notes ? `Speaker Notes: ${notes}` : ''].filter(Boolean).join('\n\n');
+      // Check speaker notes for this slide
+      let speakerNotes = '';
+      const notesFile =
+        zip.files[`ppt/notesSlides/notesSlide${slideNum}.xml`] ||
+        zip.files[`ppt/notesSlides/notesSlide${i + 1}.xml`];
+      if (notesFile) {
+        const notesXml = await notesFile.async('text');
+        const notesParas = notesXml.match(/<a:p[^>]*>([\s\S]*?)<\/a:p>/gi) || [];
+        const noteLines: string[] = [];
+        for (const np of notesParas) {
+          const ntMatches = np.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi) || [];
+          const ntText = ntMatches
+            .map((t) => decodeXmlEntities(t.replace(/<[^>]+>/g, '')))
+            .join('')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
+          if (ntText && !/^slide\s+\d+$/i.test(ntText)) {
+            noteLines.push(ntText);
+          }
+        }
+        if (noteLines.length > 0) {
+          speakerNotes = noteLines.join('\n');
+        }
+      }
 
-      if (slideContent.trim() && !isBinaryOrGarbageText(slideContent)) {
+      if (paragraphs.length === 0 && !speakerNotes) {
+        continue;
+      }
+
+      // Use the first non-empty text of each slide as its title
+      const title = paragraphs[0] || `Slide ${slideNum}`;
+      const bodyParagraphs = paragraphs.slice(1);
+      const bulletText = bodyParagraphs.map((p) => `• ${p}`).join('\n');
+
+      const slideParts: string[] = [title];
+      if (bulletText) slideParts.push(bulletText);
+      if (speakerNotes) slideParts.push(`Speaker Notes:\n${speakerNotes}`);
+
+      const slideContent = sanitizeText(slideParts.join('\n\n'));
+
+      if (slideContent.trim()) {
         sections.push({
-          id: `slide-${i + 1}`,
-          label: `Slide ${i + 1}`,
+          id: `slide-${slideNum}`,
+          label: `Slide ${slideNum}: ${title.slice(0, 50)}`,
           content: slideContent,
           wordCount: slideContent.split(/\s+/).filter(Boolean).length,
         });
       }
     }
+  } catch (zipErr: any) {
+    console.warn('[PPTX] Zip parsing error:', zipErr?.message || zipErr);
+  }
 
-    // If no slide files were found, scan all XML files in the zip for text
-    if (sections.length === 0) {
-      const xmlFiles = Object.keys(zip.files).filter((f) => f.endsWith('.xml'));
-      let combinedXmlText = '';
-      for (const xf of xmlFiles) {
-        const content = await zip.files[xf].async('text');
-        const matches = content.match(/<a:t[^>]*>(.*?)<\/a:t>/g) || [];
-        const texts = matches.map((m) => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
-        if (texts.length > 0) {
-          combinedXmlText += texts.join(' ') + '\n\n';
-        }
-      }
-      if (combinedXmlText.trim() && !isBinaryOrGarbageText(combinedXmlText)) {
-        sections.push({
-          id: 'slide-1',
-          label: 'Presentation Content',
-          content: combinedXmlText.trim(),
-          wordCount: combinedXmlText.split(/\s+/).filter(Boolean).length,
+  // If no sections were produced, try Gemini multimodal fallback
+  // NEVER fall through to the printable-byte scanner for any ZIP-based format (.pptx)
+  if (sections.length === 0) {
+    console.warn('[PPTX] No slide text found, attempting Gemini multimodal fallback...');
+    const ai = getGemini();
+    if (ai) {
+      try {
+        const aiRes = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    data: buffer.toString('base64'),
+                  },
+                },
+                {
+                  text: 'Extract and transcribe all slides, slide titles, bullet points, and speaker notes verbatim from this presentation. Format each slide clearly as [Slide N: Title] followed by its content.',
+                },
+              ],
+            },
+          ],
         });
+        if (aiRes.text && aiRes.text.trim().length > 50) {
+          const cleanAi = sanitizeText(aiRes.text);
+          const quality = evaluateExtractionQuality(cleanAi);
+          if (quality.isValid) {
+            return extractFromText(cleanAi, originalName);
+          }
+        }
+      } catch (aiErr: any) {
+        console.warn('[PPTX] Gemini multimodal fallback failed:', aiErr?.message || aiErr);
       }
     }
-  } catch (zipErr) {
-    console.warn('PPTX zip parsing error:', zipErr);
-  }
-
-  // Binary text fallback for legacy .ppt
-  if (sections.length === 0) {
-    const raw = buffer.toString('latin1');
-    const words = raw.match(/[\x20-\x7E\t\n\r]{4,}/g) || [];
-    const text = words.join(' ').replace(/\s+/g, ' ').trim();
-    if (text && !isBinaryOrGarbageText(text)) {
-      sections.push({
-        id: 'slide-1',
-        label: 'Slide 1',
-        content: text,
-        wordCount: text.split(/\s+/).filter(Boolean).length,
-      });
-    }
-  }
-
-  if (sections.length === 0) {
-    throw new Error(`Could not extract readable text from presentation "${originalName}".`);
+    throw new Error(`Could not read this file properly. Please ensure the PowerPoint presentation "${originalName}" is not corrupted or password-protected.`);
   }
 
   const fullText = sections.map((s) => `[${s.label}]\n${s.content}`).join('\n\n');
@@ -879,63 +1085,85 @@ export async function extractFromSpreadsheet(buffer: Buffer, originalName: strin
     }
   }
 
-  // Primary: SheetJS XLSX workbook parser
+  // Primary: SheetJS XLSX workbook parser (handles both Buffer and Uint8Array)
   if (sections.length === 0) {
     try {
-      const workbook = XLSX.read(buffer, {
-        type: 'buffer',
-        cellDates: true,
-        raw: false,
-        dateNF: 'yyyy-mm-dd',
-      });
-
-      for (const sheetName of workbook.SheetNames) {
-        const sheet = workbook.Sheets[sheetName];
-        if (!sheet) continue;
-
-        const csvContent = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-        if (!csvContent || !csvContent.trim()) continue;
-
-        const rawLines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter((l) => {
-          return l && /[^\s,;\t"]/.test(l);
+      let workbook: XLSX.WorkBook | null = null;
+      try {
+        workbook = XLSX.read(buffer, {
+          type: 'buffer',
+          cellDates: true,
+          raw: false,
+          dateNF: 'yyyy-mm-dd',
         });
+      } catch {
+        workbook = XLSX.read(new Uint8Array(buffer), {
+          type: 'array',
+          cellDates: true,
+          raw: false,
+          dateNF: 'yyyy-mm-dd',
+        });
+      }
 
-        if (rawLines.length === 0) continue;
+      if (workbook) {
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          if (!sheet) continue;
 
-        // If only 1 row exists (e.g. single item, header list, or key metrics)
-        if (rawLines.length === 1) {
-          const label = workbook.SheetNames.length > 1 ? `Sheet "${sheetName}"` : 'Sheet Content';
-          const content = `[${sheetName}]\n${rawLines[0]}`;
-          sections.push({
-            id: `sheet-${sheetName}-r1`,
-            label,
-            content,
-            wordCount: content.split(/\s+/).filter(Boolean).length,
-          });
-          continue;
-        }
+          // Method A: sheet_to_json (preserves all rows, formulas, questions, and cells)
+          const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: '' });
+          const cleanedRows: string[] = [];
 
-        // If multiple rows exist: treat row 1 as columns and chunk data rows
-        const headers = rawLines[0];
-        const dataRows = rawLines.slice(1);
-        const chunkSize = 50;
+          for (const r of rows) {
+            if (!Array.isArray(r)) continue;
+            const cells = r.map((c) => (c === null || c === undefined ? '' : String(c).trim())).filter(Boolean);
+            if (cells.length > 0) {
+              cleanedRows.push(cells.join(' | '));
+            }
+          }
 
-        for (let r = 0; r < dataRows.length; r += chunkSize) {
-          const chunkRows = dataRows.slice(r, r + chunkSize);
-          const startRow = r + 2;
-          const endRow = r + 1 + chunkRows.length;
-          const label =
-            workbook.SheetNames.length > 1
-              ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
-              : `Rows ${startRow}-${endRow}`;
+          // Method B: Fallback to sheet_to_csv if sheet_to_json was empty
+          if (cleanedRows.length === 0) {
+            const csvContent = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+            if (csvContent && csvContent.trim()) {
+              const lines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && /[^\s,;\t"]/.test(l));
+              cleanedRows.push(...lines);
+            }
+          }
 
-          const content = `Columns: ${headers}\nData:\n` + chunkRows.join('\n');
-          sections.push({
-            id: `sheet-${sheetName}-r${startRow}`,
-            label,
-            content,
-            wordCount: content.split(/\s+/).filter(Boolean).length,
-          });
+          if (cleanedRows.length === 0) continue;
+
+          if (cleanedRows.length <= 3) {
+            const label = workbook.SheetNames.length > 1 ? `Sheet "${sheetName}"` : 'Spreadsheet Content';
+            const content = `[${sheetName}]\n` + cleanedRows.join('\n');
+            sections.push({
+              id: `sheet-${sheetName}-r1`,
+              label,
+              content,
+              wordCount: content.split(/\s+/).filter(Boolean).length,
+            });
+            continue;
+          }
+
+          // Chunk rows into readable blocks of 40
+          const chunkSize = 40;
+          for (let r = 0; r < cleanedRows.length; r += chunkSize) {
+            const chunkRows = cleanedRows.slice(r, r + chunkSize);
+            const startRow = r + 1;
+            const endRow = r + chunkRows.length;
+            const label =
+              workbook.SheetNames.length > 1
+                ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
+                : `Rows ${startRow}-${endRow}`;
+
+            const content = chunkRows.join('\n');
+            sections.push({
+              id: `sheet-${sheetName}-r${startRow}`,
+              label,
+              content,
+              wordCount: content.split(/\s+/).filter(Boolean).length,
+            });
+          }
         }
       }
     } catch (xlsxErr) {
@@ -943,34 +1171,131 @@ export async function extractFromSpreadsheet(buffer: Buffer, originalName: strin
     }
   }
 
-  // Secondary fallback: Direct OpenXML extraction via JSZip for .xlsx
+  // Secondary fallback: Direct OpenXML extraction via JSZip for .xlsx (shared strings & worksheet cells)
   if (sections.length === 0) {
     try {
       const zip = await JSZip.loadAsync(buffer);
+      const extractedTokens: string[] = [];
+
+      // 1. Shared strings
       const stringsFile = zip.file('xl/sharedStrings.xml');
       if (stringsFile) {
         const xml = await stringsFile.async('text');
         const textTokens = xml.match(/<t[^>]*>([^<]+)<\/t>/gi) || [];
-        const extractedStrings = textTokens
-          .map((t) => t.replace(/<[^>]+>/g, '').trim())
-          .filter(Boolean);
-
-        if (extractedStrings.length > 0) {
-          const content = extractedStrings.join('\n');
-          sections.push({
-            id: 'sheet-shared-strings',
-            label: 'Workbook Content',
-            content,
-            wordCount: content.split(/\s+/).filter(Boolean).length,
-          });
+        for (const t of textTokens) {
+          const clean = t.replace(/<[^>]+>/g, '').trim();
+          if (clean) extractedTokens.push(clean);
         }
+      }
+
+      // 2. Worksheet cell values (inline strings and values)
+      const sheetFiles = Object.keys(zip.files).filter((f) => f.startsWith('xl/worksheets/sheet') && f.endsWith('.xml'));
+      for (const sf of sheetFiles) {
+        const sheetFile = zip.file(sf);
+        if (sheetFile) {
+          const xml = await sheetFile.async('text');
+          const cellMatches = xml.match(/<t[^>]*>([^<]+)<\/t>|<v>([^<]+)<\/v>/gi) || [];
+          for (const m of cellMatches) {
+            const clean = m.replace(/<[^>]+>/g, '').trim();
+            if (clean && !clean.match(/^[\d.]+$/)) {
+              extractedTokens.push(clean);
+            }
+          }
+        }
+      }
+
+      if (extractedTokens.length > 0) {
+        const content = extractedTokens.join('\n');
+        sections.push({
+          id: 'sheet-openxml-tokens',
+          label: 'Spreadsheet Content',
+          content,
+          wordCount: content.split(/\s+/).filter(Boolean).length,
+        });
       }
     } catch (zipErr) {
       console.warn('XLSX zip string fallback failed:', zipErr);
     }
   }
 
-  // Tertiary fallback: Plain text or CSV decoding
+  // Tertiary fallback: Gemini AI document transcription for difficult/scanned/corrupted spreadsheets
+  if (sections.length === 0) {
+    try {
+      const ai = getGemini();
+      if (ai) {
+        const mime = originalName.toLowerCase().endsWith('.xlsx')
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/octet-stream';
+        const aiRes = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: mime,
+                    data: buffer.toString('base64'),
+                  },
+                },
+                {
+                  text: 'Extract and transcribe all tabular rows, cells, test questions, columns, numbers, and data from this spreadsheet verbatim. Format as clear readable tables or questions.',
+                },
+              ],
+            },
+          ],
+        });
+        if (aiRes.text && aiRes.text.trim().length > 5) {
+          const aiClean = sanitizeText(aiRes.text);
+          if (!isBinaryOrGarbageText(aiClean)) {
+            return extractFromText(aiClean, originalName);
+          }
+        }
+      }
+    } catch (aiSpreadsheetErr) {
+      console.warn('Gemini spreadsheet extraction fallback notice:', aiSpreadsheetErr);
+    }
+  }
+
+  // Quaternary fallback: UTF-16LE and 8-bit text scan for binary BIFF spreadsheets (.xls)
+  if (sections.length === 0) {
+    const rawTokens: string[] = [];
+    for (const offset of [0, 1]) {
+      let run = '';
+      for (let i = offset; i < buffer.length - 1; i += 2) {
+        const b0 = buffer[i];
+        const b1 = buffer[i + 1];
+        if (b1 === 0x00 && ((b0 >= 0x20 && b0 <= 0x7e) || b0 === 0x09 || b0 === 0x0a || b0 === 0x0d)) {
+          run += String.fromCharCode(b0);
+        } else {
+          if (run.trim().length >= 3 && /[\p{L}\p{N}]/u.test(run)) {
+            rawTokens.push(run.trim());
+          }
+          run = '';
+        }
+      }
+      if (run.trim().length >= 3 && /[\p{L}\p{N}]/u.test(run)) {
+        rawTokens.push(run.trim());
+      }
+    }
+
+    const raw8 = buffer.toString('latin1').match(/[\x20-\x7E\xA0-\xFF\t\n\r]{3,}/g) || [];
+    for (const r of raw8) {
+      if (r.trim().length >= 3 && !r.startsWith('PK') && !r.startsWith('\xD0\xCF') && /[\p{L}\p{N}]/u.test(r)) {
+        rawTokens.push(r.trim());
+      }
+    }
+
+    const uniqueTokens = Array.from(new Set(rawTokens)).filter((t) => t.length > 2);
+    if (uniqueTokens.length > 0) {
+      const candidate = sanitizeText(uniqueTokens.join('\n'));
+      if (candidate && !isBinaryOrGarbageText(candidate)) {
+        return extractFromText(candidate, originalName);
+      }
+    }
+  }
+
+  // Quinary fallback: Plain text or CSV decoding
   if (sections.length === 0) {
     const rawUtf8 = sanitizeText(buffer.toString('utf-8'));
     if (!isBinaryOrGarbageText(rawUtf8) && rawUtf8.length > 3) {
@@ -1194,6 +1519,9 @@ export async function extractDocumentBuffer(
         throw pdfErr;
       }
     }
+  } else if (ext === '.pptx' || (isZip && ext === '.ppt')) {
+    // Direct route for PowerPoint OpenXML presentations
+    extracted = await extractFromPptx(buffer, originalName);
   } else if (isZip) {
     // Inspect zip to determine exact Office / OpenDoc format
     try {
@@ -1205,28 +1533,28 @@ export async function extractDocumentBuffer(
       const hasOdf = fileNames.some((f) => f === 'content.xml');
       const hasEpub = fileNames.some((f) => f === 'META-INF/container.xml');
 
-      if (hasWord || ext === '.docx') {
-        extracted = await extractFromDocx(buffer, originalName);
-      } else if (hasPpt || ext === '.pptx') {
+      if (hasPpt || ext === '.pptx') {
         extracted = await extractFromPptx(buffer, originalName);
+      } else if (hasWord || ext === '.docx') {
+        extracted = await extractFromDocx(buffer, originalName);
       } else if (hasXls || ext === '.xlsx') {
         extracted = await extractFromSpreadsheet(buffer, originalName, false);
       } else if (hasOdf || ['.odt', '.ods', '.odp'].includes(ext)) {
         extracted = await extractFromOdf(buffer, originalName);
       } else if (hasEpub || ext === '.epub') {
         extracted = await extractFromEpub(buffer, originalName);
-      } else if (ext === '.docx' || ext === '.doc') {
-        extracted = await extractFromDocx(buffer, originalName);
-      } else if (ext === '.pptx' || ext === '.ppt') {
-        extracted = await extractFromPptx(buffer, originalName);
-      } else if (ext === '.xlsx' || ext === '.xls') {
-        extracted = await extractFromSpreadsheet(buffer, originalName, false);
       } else {
         extracted = await extractFromZipArchive(buffer, originalName);
       }
     } catch (zipErr: any) {
-      console.warn('Zip inspection failed, attempting DOCX fallback:', zipErr?.message || zipErr);
-      extracted = await extractFromDocx(buffer, originalName);
+      console.warn('Zip inspection error:', zipErr?.message || zipErr);
+      if (ext === '.pptx') {
+        extracted = await extractFromPptx(buffer, originalName);
+      } else if (ext === '.xlsx') {
+        extracted = await extractFromSpreadsheet(buffer, originalName, false);
+      } else {
+        extracted = await extractFromDocx(buffer, originalName);
+      }
     }
   } else if (isOle2) {
     if (ext === '.xls' || ext === '.xlsx') {
@@ -1245,27 +1573,11 @@ export async function extractDocumentBuffer(
   } else if (isRtf || ext === '.rtf') {
     extracted = extractFromRtf(buffer, originalName);
   } else if (['.docx', '.doc'].includes(ext)) {
-    try {
-      extracted = await extractFromDocx(buffer, originalName);
-    } catch (docErr) {
-      try {
-        extracted = await extractFromSpreadsheet(buffer, originalName, false);
-      } catch {
-        throw docErr;
-      }
-    }
+    extracted = await extractFromDocx(buffer, originalName);
   } else if (['.pptx', '.ppt'].includes(ext)) {
     extracted = await extractFromPptx(buffer, originalName);
   } else if (['.xlsx', '.xls'].includes(ext)) {
-    try {
-      extracted = await extractFromSpreadsheet(buffer, originalName, false);
-    } catch (xlsErr) {
-      try {
-        extracted = await extractFromDocx(buffer, originalName);
-      } catch {
-        throw xlsErr;
-      }
-    }
+    extracted = await extractFromSpreadsheet(buffer, originalName, false);
   } else if (['.csv', '.tsv'].includes(ext)) {
     extracted = await extractFromSpreadsheet(buffer, originalName, true);
   } else if (['.txt', '.md', '.markdown', '.json', '.html', '.xml', '.log', '.tex'].includes(ext) || mimeType?.startsWith('text/')) {
@@ -1299,9 +1611,53 @@ export async function extractDocumentBuffer(
     }
   }
 
+  // Quality gate check on extracted content
+  let quality = evaluateExtractionQuality(extracted?.fullText || '');
+
+  // If extraction failed the quality gate, attempt Gemini multimodal document fallback
+  if (!quality.isValid) {
+    console.warn(`[QualityGate] Primary extraction failed: ${quality.reason}. Triggering Gemini multimodal fallback...`);
+    const ai = getGemini();
+    if (ai) {
+      try {
+        let mime = mimeType || 'application/octet-stream';
+        if (ext === '.pptx') mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        else if (ext === '.docx') mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        else if (ext === '.xlsx') mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        else if (ext === '.pdf') mime = 'application/pdf';
+        else if (isZip) mime = 'application/zip';
+
+        const aiRes = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: mime, data: buffer.toString('base64') } },
+                { text: 'Extract and transcribe all readable text, titles, headings, numbers, tables, and content from this document verbatim. Preserve the complete text structure.' },
+              ],
+            },
+          ],
+        });
+        if (aiRes.text && aiRes.text.trim().length > 30) {
+          const aiClean = sanitizeText(aiRes.text);
+          const fallbackQuality = evaluateExtractionQuality(aiClean);
+          if (fallbackQuality.isValid) {
+            extracted = extractFromText(aiClean, originalName);
+            quality = fallbackQuality;
+          }
+        }
+      } catch (finalAiErr) {
+        console.warn('[QualityGate] Gemini multimodal fallback failed:', finalAiErr);
+      }
+    }
+  }
+
   // Sanitize all extracted sections and fullText
-  extracted.fullText = sanitizeText(extracted.fullText);
-  if (extracted.sections) {
+  if (extracted?.fullText) {
+    extracted.fullText = sanitizeText(extracted.fullText);
+  }
+  if (extracted?.sections) {
     extracted.sections = extracted.sections.map((s) => ({
       ...s,
       content: sanitizeText(s.content),
@@ -1309,12 +1665,10 @@ export async function extractDocumentBuffer(
     }));
   }
 
-  if (!extracted || !extracted.fullText || extracted.fullText.trim().length === 0) {
-    throw new Error(`Could not extract readable text from "${originalName}". The document appears to be empty.`);
-  }
-
-  if (isBinaryOrGarbageText(extracted.fullText)) {
-    throw new Error(`Could not extract readable text from "${originalName}". The file content is in an unreadable binary format.`);
+  // Re-verify quality gate
+  quality = evaluateExtractionQuality(extracted?.fullText || '');
+  if (!quality.isValid) {
+    throw new Error(`Could not read this file properly. Please ensure the document is not corrupted, encrypted, or empty. (${quality.reason || 'Unreadable format'})`);
   }
 
   return extracted;

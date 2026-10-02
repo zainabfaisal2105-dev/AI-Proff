@@ -3,15 +3,46 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 
 /**
+ * Unescapes standard XML entities into plain characters.
+ */
+export function decodeXmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+/**
  * Validates whether raw text is authentic printable plain text rather than unparsed binary archives.
+ * Enforces quality gate: rejects zip/OpenXML markers, checks garbage ratio, and ensures minimum meaningful content.
  */
 export function isPrintablePlainText(text: string): boolean {
   if (!text || typeof text !== 'string') return false;
-  const cleaned = text.replace(/\0/g, '').replace(/[\x01-\x08\x0B\x0E-\x1F]/g, ' ').trim();
+  const cleaned = text
+    .replace(/\0/g, '')
+    .replace(/[\x01-\x08\x0B\x0E-\x1F]/g, ' ')
+    .trim();
   if (cleaned.length === 0) return false;
 
-  // Reject raw unparsed archive headers
-  if (cleaned.startsWith('PK\x03\x04') || cleaned.startsWith('\xD0\xCF\x11\xE0') || cleaned.startsWith('7z\xBC\xAF\x27\x1C')) {
+  // Reject raw unparsed archive headers or OpenXML parts
+  const zipMarkers = [
+    '[Content_Types].xml',
+    'ppt/slides/',
+    'word/document.xml',
+    'xl/worksheets/',
+    '_rels/.rels',
+    'PK\x03\x04',
+    'PK\x05\x06',
+    'PK\x07\x08',
+    '\xD0\xCF\x11\xE0',
+    '7z\xBC\xAF\x27\x1C',
+  ];
+  if (zipMarkers.some((m) => cleaned.includes(m)) || cleaned.startsWith('PK')) {
     return false;
   }
   if (cleaned.startsWith('%PDF-') && cleaned.length < 500 && cleaned.includes('stream')) {
@@ -19,74 +50,198 @@ export function isPrintablePlainText(text: string): boolean {
   }
 
   // Count recognizable linguistic and numeric characters (all alphabets & numbers)
-  const lettersAndDigits = cleaned.slice(0, 2000).match(/[\p{L}\p{N}]/gu) || [];
-  if (lettersAndDigits.length >= 2) {
-    return true;
+  const lettersAndDigits = cleaned.match(/[\p{L}\p{N}]/gu) || [];
+  if (lettersAndDigits.length < 50) {
+    return false;
   }
 
-  return false;
+  // Compute garbage ratio
+  let garbageCount = 0;
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    const code = cleaned.charCodeAt(i);
+    if (
+      char === '\uFFFD' ||
+      (code < 32 && code !== 9 && code !== 10 && code !== 13) ||
+      (code >= 127 && code <= 159) ||
+      !/[\p{L}\p{N}\p{P}\p{Z}\p{S}\s]/u.test(char)
+    ) {
+      garbageCount++;
+    }
+  }
+
+  const garbageRatio = garbageCount / cleaned.length;
+  if (garbageRatio > 0.10) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Helper to scan binary ArrayBuffer for printable UTF-16LE and 8-bit text runs.
+ * Enables client-side extraction of legacy .doc and binary spreadsheets.
+ */
+export function extractBinaryRunsFromArrayBuffer(data: ArrayBuffer): string {
+  const bytes = new Uint8Array(data);
+  const runs: string[] = [];
+
+  // 1. Scan UTF-16LE at both offset 0 and 1
+  for (const offset of [0, 1]) {
+    let run = '';
+    for (let i = offset; i < bytes.length - 1; i += 2) {
+      const b0 = bytes[i];
+      const b1 = bytes[i + 1];
+      if (b1 === 0x00 && ((b0 >= 0x20 && b0 <= 0x7e) || b0 === 0x09 || b0 === 0x0a || b0 === 0x0d)) {
+        run += String.fromCharCode(b0);
+      } else if (b1 > 0x00 && b1 < 0x20) {
+        run += String.fromCharCode((b1 << 8) | b0);
+      } else {
+        const trimmed = run.trim();
+        if (trimmed.length >= 3 && /[\p{L}\p{N}]/u.test(trimmed)) {
+          runs.push(trimmed);
+        }
+        run = '';
+      }
+    }
+    const trimmed = run.trim();
+    if (trimmed.length >= 3 && /[\p{L}\p{N}]/u.test(trimmed)) {
+      runs.push(trimmed);
+    }
+  }
+
+  // 2. Scan Latin-1 / 8-bit strings
+  let latinRun = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if ((b >= 0x20 && b <= 0x7e) || (b >= 0xa0 && b <= 0xff) || b === 0x09 || b === 0x0a || b === 0x0d) {
+      latinRun += String.fromCharCode(b);
+    } else {
+      const trimmed = latinRun.trim();
+      if (trimmed.length >= 3 && /[\p{L}\p{N}]/u.test(trimmed)) {
+        runs.push(trimmed);
+      }
+      latinRun = '';
+    }
+  }
+  const trimmed = latinRun.trim();
+  if (trimmed.length >= 3 && /[\p{L}\p{N}]/u.test(trimmed)) {
+    runs.push(trimmed);
+  }
+
+  const ignored = new Set([
+    'WordDocument', 'Root Entry', 'SummaryInformation', 'DocumentSummaryInformation',
+    'CompObj', 'ObjectPool', 'Microsoft Word', 'Normal.dotm'
+  ]);
+  const filtered = runs.filter((r) => !ignored.has(r) && !r.startsWith('<<') && !r.startsWith('PK'));
+  return filtered.join('\n\n');
 }
 
 /**
  * Extracts structured document data from Excel or CSV directly in the client browser.
  */
-export function extractSpreadsheetClientSide(data: ArrayBuffer, fileName: string): ExtractedDocument {
+export async function extractSpreadsheetClientSide(data: ArrayBuffer, fileName: string): Promise<ExtractedDocument> {
   const title = fileName.replace(/\.[^/.]+$/, '');
   const isCsv = /\.csv$/i.test(fileName);
-  const workbook = XLSX.read(new Uint8Array(data), {
-    type: 'array',
-    cellDates: true,
-    raw: false,
-    dateNF: 'yyyy-mm-dd',
-  });
-
   const sections: DocumentSection[] = [];
 
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) continue;
-
-    const csvContent = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-    if (!csvContent || !csvContent.trim()) continue;
-
-    const rawLines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter((l) => {
-      return l && /[^\s,;\t"]/.test(l);
+  // Method 1: SheetJS parsing with sheet_to_json
+  try {
+    const workbook = XLSX.read(new Uint8Array(data), {
+      type: 'array',
+      cellDates: true,
+      raw: false,
+      dateNF: 'yyyy-mm-dd',
     });
 
-    if (rawLines.length === 0) continue;
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
 
-    if (rawLines.length === 1) {
-      const label = workbook.SheetNames.length > 1 ? `Sheet "${sheetName}"` : 'Sheet Content';
-      const content = `[${sheetName}]\n${rawLines[0]}`;
-      sections.push({
-        id: `sheet-${sheetName}-r1`,
-        label,
-        content,
-        wordCount: content.split(/\s+/).filter(Boolean).length,
-      });
-      continue;
+      const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: '' });
+      const cleanedRows: string[] = [];
+
+      for (const r of rows) {
+        if (!Array.isArray(r)) continue;
+        const cells = r.map((c) => (c === null || c === undefined ? '' : String(c).trim())).filter(Boolean);
+        if (cells.length > 0) {
+          cleanedRows.push(cells.join(' | '));
+        }
+      }
+
+      if (cleanedRows.length === 0) {
+        const csvContent = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+        if (csvContent && csvContent.trim()) {
+          const lines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && /[^\s,;\t"]/.test(l));
+          cleanedRows.push(...lines);
+        }
+      }
+
+      if (cleanedRows.length === 0) continue;
+
+      if (cleanedRows.length <= 3) {
+        const label = workbook.SheetNames.length > 1 ? `Sheet "${sheetName}"` : 'Spreadsheet Content';
+        const content = `[${sheetName}]\n` + cleanedRows.join('\n');
+        sections.push({
+          id: `sheet-${sheetName}-r1`,
+          label,
+          content,
+          wordCount: content.split(/\s+/).filter(Boolean).length,
+        });
+        continue;
+      }
+
+      const chunkSize = 40;
+      for (let r = 0; r < cleanedRows.length; r += chunkSize) {
+        const chunkRows = cleanedRows.slice(r, r + chunkSize);
+        const startRow = r + 1;
+        const endRow = r + chunkRows.length;
+        const label =
+          workbook.SheetNames.length > 1
+            ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
+            : `Rows ${startRow}-${endRow}`;
+
+        const content = chunkRows.join('\n');
+        sections.push({
+          id: `sheet-${sheetName}-r${startRow}`,
+          label,
+          content,
+          wordCount: content.split(/\s+/).filter(Boolean).length,
+        });
+      }
     }
+  } catch (sheetErr) {
+    console.warn('Browser XLSX parsing error:', sheetErr);
+  }
 
-    const headers = rawLines[0];
-    const dataRows = rawLines.slice(1);
-    const chunkSize = 50;
+  // Method 2: JSZip OpenXML fallback in browser
+  if (sections.length === 0) {
+    try {
+      const zip = await JSZip.loadAsync(data);
+      const stringsFile = zip.file('xl/sharedStrings.xml');
+      if (stringsFile) {
+        const xml = await stringsFile.async('text');
+        const textTokens = xml.match(/<t[^>]*>([^<]+)<\/t>/gi) || [];
+        const extractedStrings = textTokens.map((t) => t.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+        if (extractedStrings.length > 0) {
+          sections.push({
+            id: 'sheet-shared-strings',
+            label: 'Workbook Content',
+            content: extractedStrings.join('\n'),
+            wordCount: extractedStrings.length,
+          });
+        }
+      }
+    } catch {
+      // Continue to binary scan
+    }
+  }
 
-    for (let r = 0; r < dataRows.length; r += chunkSize) {
-      const chunkRows = dataRows.slice(r, r + chunkSize);
-      const startRow = r + 2;
-      const endRow = r + 1 + chunkRows.length;
-      const label =
-        workbook.SheetNames.length > 1
-          ? `Sheet "${sheetName}", rows ${startRow}-${endRow}`
-          : `Rows ${startRow}-${endRow}`;
-
-      const content = `Columns: ${headers}\nData:\n` + chunkRows.join('\n');
-      sections.push({
-        id: `sheet-${sheetName}-r${startRow}`,
-        label,
-        content,
-        wordCount: content.split(/\s+/).filter(Boolean).length,
-      });
+  // Method 3: Binary text run fallback
+  if (sections.length === 0) {
+    const binaryRuns = extractBinaryRunsFromArrayBuffer(data);
+    if (binaryRuns && isPrintablePlainText(binaryRuns)) {
+      return extractTextClientSide(binaryRuns, title);
     }
   }
 
@@ -106,41 +261,158 @@ export function extractSpreadsheetClientSide(data: ArrayBuffer, fileName: string
 }
 
 /**
- * Extracts structured document data from DOCX directly in the browser via JSZip XML parsing.
+ * Extracts structured document data from DOCX/DOC directly in the browser.
  */
 export async function extractDocxClientSide(data: ArrayBuffer, fileName: string): Promise<ExtractedDocument> {
   const title = fileName.replace(/\.[^/.]+$/, '');
-  const zip = await JSZip.loadAsync(data);
-  const docFile = zip.file('word/document.xml');
 
-  if (!docFile) {
-    throw new Error(`No document.xml found inside Word file: ${fileName}`);
+  // 1. Try JSZip OpenXML parsing for .docx
+  try {
+    const zip = await JSZip.loadAsync(data);
+    const docFile = zip.file('word/document.xml');
+
+    if (docFile) {
+      const xmlContent = await docFile.async('text');
+
+      // Format paragraphs, tabs, breaks
+      const withLineBreaks = xmlContent
+        .replace(/<\/w:p>/gi, '\n\n')
+        .replace(/<w:br[^>]*\/>/gi, '\n')
+        .replace(/<w:tab[^>]*\/>/gi, '\t')
+        .replace(/<\/w:tr>/gi, '\n')
+        .replace(/<\/w:tc>/gi, ' | ');
+
+      const textOnly = withLineBreaks
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .trim();
+
+      if (textOnly && isPrintablePlainText(textOnly)) {
+        return extractTextClientSide(textOnly, title);
+      }
+    }
+  } catch (zipErr) {
+    console.warn('Browser docx JSZip failed, attempting binary stream scan:', zipErr);
   }
 
-  const xmlContent = await docFile.async('text');
-
-  // Format paragraphs, tabs, breaks
-  const withLineBreaks = xmlContent
-    .replace(/<\/w:p>/gi, '\n\n')
-    .replace(/<w:br[^>]*\/>/gi, '\n')
-    .replace(/<w:tab[^>]*\/>/gi, '\t')
-    .replace(/<\/w:tr>/gi, '\n')
-    .replace(/<\/w:tc>/gi, ' | ');
-
-  const textOnly = withLineBreaks
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .trim();
-
-  if (!textOnly || !isPrintablePlainText(textOnly)) {
-    throw new Error(`Could not extract readable text from Word file: ${fileName}`);
+  // 2. Binary stream scan for legacy .doc or corrupted docx
+  const binaryRuns = extractBinaryRunsFromArrayBuffer(data);
+  if (binaryRuns && isPrintablePlainText(binaryRuns)) {
+    return extractTextClientSide(binaryRuns, title);
   }
 
-  return extractTextClientSide(textOnly, title);
+  throw new Error(`Could not extract readable text from Word file: ${fileName}`);
+}
+
+/**
+ * Extracts structured presentation slides from PPTX directly in the browser using JSZip.
+ * Sorts slides numerically, groups text per paragraph <a:p>, extracts speaker notes,
+ * and formats each slide as "Slide N: <title>" followed by bullet text.
+ */
+export async function extractPptxClientSide(data: ArrayBuffer, fileName: string): Promise<ExtractedDocument> {
+  const title = fileName.replace(/\.[^/.]+$/, '');
+  const sections: DocumentSection[] = [];
+
+  try {
+    const zip = await JSZip.loadAsync(data);
+    const slideFiles = Object.keys(zip.files).filter((f) =>
+      f.startsWith('ppt/slides/slide') && f.endsWith('.xml')
+    );
+
+    slideFiles.sort((a, b) => {
+      const numA = parseInt(a.match(/slide(\d+)\.xml/)?.[1] || '0', 10);
+      const numB = parseInt(b.match(/slide(\d+)\.xml/)?.[1] || '0', 10);
+      return numA - numB;
+    });
+
+    for (let i = 0; i < slideFiles.length; i++) {
+      const filename = slideFiles[i];
+      const slideNum = parseInt(filename.match(/slide(\d+)\.xml/)?.[1] || String(i + 1), 10);
+      const xml = await zip.files[filename].async('text');
+
+      const paragraphMatches = xml.match(/<a:p[^>]*>([\s\S]*?)<\/a:p>/gi) || [];
+      const paragraphs: string[] = [];
+
+      for (const pXml of paragraphMatches) {
+        const textMatches = pXml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi) || [];
+        const pText = textMatches
+          .map((t) => decodeXmlEntities(t.replace(/<[^>]+>/g, '')))
+          .join('')
+          .replace(/[ \t]+/g, ' ')
+          .trim();
+        if (pText) {
+          paragraphs.push(pText);
+        }
+      }
+
+      // Check speaker notes
+      let speakerNotes = '';
+      const notesCandidate =
+        zip.files[`ppt/notesSlides/notesSlide${slideNum}.xml`] ||
+        zip.files[`ppt/notesSlides/notesSlide${i + 1}.xml`];
+      if (notesCandidate) {
+        const notesXml = await notesCandidate.async('text');
+        const notesParas = notesXml.match(/<a:p[^>]*>([\s\S]*?)<\/a:p>/gi) || [];
+        const noteLines: string[] = [];
+        for (const np of notesParas) {
+          const ntMatches = np.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi) || [];
+          const ntText = ntMatches
+            .map((t) => decodeXmlEntities(t.replace(/<[^>]+>/g, '')))
+            .join('')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
+          if (ntText && !/^slide\s+\d+$/i.test(ntText)) {
+            noteLines.push(ntText);
+          }
+        }
+        if (noteLines.length > 0) {
+          speakerNotes = noteLines.join('\n');
+        }
+      }
+
+      if (paragraphs.length === 0 && !speakerNotes) {
+        continue;
+      }
+
+      const slideTitle = paragraphs[0] || `Slide ${slideNum}`;
+      const bullets = paragraphs.slice(1).map((b) => `• ${b}`).join('\n');
+
+      const slideParts: string[] = [slideTitle];
+      if (bullets) slideParts.push(bullets);
+      if (speakerNotes) slideParts.push(`Speaker Notes:\n${speakerNotes}`);
+
+      const content = slideParts.join('\n\n').trim();
+      if (content) {
+        sections.push({
+          id: `slide-${slideNum}`,
+          label: `Slide ${slideNum}: ${slideTitle.slice(0, 50)}`,
+          content,
+          wordCount: content.split(/\s+/).filter(Boolean).length,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[PPTX Client] JSZip parsing failed:', err);
+  }
+
+  if (sections.length === 0) {
+    throw new Error(`Could not read this PowerPoint presentation: ${fileName}`);
+  }
+
+  const fullText = sections.map((s) => `[${s.label}]\n${s.content}`).join('\n\n');
+  return {
+    title,
+    fileType: 'pptx',
+    sections,
+    fullText,
+    totalWords: Math.max(fullText.split(/\s+/).filter(Boolean).length, 1),
+    totalCharacters: fullText.length,
+    metadata: { totalSlides: sections.length },
+  };
 }
 
 /**
@@ -149,34 +421,33 @@ export async function extractDocxClientSide(data: ArrayBuffer, fileName: string)
 export async function extractClientSideFallback(file: File): Promise<ExtractedDocument> {
   const name = file.name.toLowerCase();
 
-  // 1. Spreadsheet
-  if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || name.endsWith('.tsv')) {
+  // 1. PowerPoint presentation
+  if (name.endsWith('.pptx') || name.endsWith('.ppt')) {
     const arrayBuffer = await file.arrayBuffer();
-    return extractSpreadsheetClientSide(arrayBuffer, file.name);
+    return await extractPptxClientSide(arrayBuffer, file.name);
   }
 
-  // 2. Word document
+  // 2. Spreadsheet
+  if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || name.endsWith('.tsv')) {
+    const arrayBuffer = await file.arrayBuffer();
+    return await extractSpreadsheetClientSide(arrayBuffer, file.name);
+  }
+
+  // 3. Word document
   if (name.endsWith('.docx') || name.endsWith('.doc')) {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      return await extractDocxClientSide(arrayBuffer, file.name);
-    } catch {
-      // If JSZip failed (e.g. legacy binary .doc), try text decoding
-      const text = await file.text();
-      if (isPrintablePlainText(text) && text.trim().length > 10) {
-        return extractTextClientSide(text, file.name.replace(/\.[^/.]+$/, ''));
-      }
-      throw new Error(`Could not parse Word document: ${file.name}`);
+    const arrayBuffer = await file.arrayBuffer();
+    return await extractDocxClientSide(arrayBuffer, file.name);
+  }
+
+  // 4. Plain text / Markdown / HTML / JSON / CSV (NEVER for binary/zip formats)
+  if (!name.endsWith('.pptx') && !name.endsWith('.docx') && !name.endsWith('.xlsx') && !name.endsWith('.pdf')) {
+    const text = await file.text();
+    if (isPrintablePlainText(text)) {
+      return extractTextClientSide(text, file.name.replace(/\.[^/.]+$/, ''));
     }
   }
 
-  // 3. Plain text / Markdown / HTML / JSON / CSV
-  const text = await file.text();
-  if (isPrintablePlainText(text)) {
-    return extractTextClientSide(text, file.name.replace(/\.[^/.]+$/, ''));
-  }
-
-  throw new Error(`Cannot extract readable text from file: ${file.name}`);
+  throw new Error(`Could not read this file properly: ${file.name}. Please ensure the document is not corrupted or password-protected.`);
 }
 
 /**

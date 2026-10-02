@@ -36,7 +36,7 @@ STRICT OPERATING PRINCIPLES:
 9. Preserve the original structural flow of the document in detailedSections.`;
 
 const CANDIDATE_MODELS = [
-  "gemini-3.8-flash",
+  "gemini-2.5-flash",
   "gemini-flash-latest",
 ];
 

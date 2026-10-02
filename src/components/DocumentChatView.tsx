@@ -19,6 +19,7 @@ import {
   Loader2,
   X,
   MessageSquare,
+  RotateCcw,
 } from 'lucide-react';
 import { StatusBead } from './StatusBead';
 
@@ -189,39 +190,71 @@ export const DocumentChatView: React.FC<DocumentChatViewProps> = ({
                   </div>
                 )}
 
-                {/* Clay Chat Bubble */}
-                <div
-                  className={`max-w-[90%] p-[14px] sm:p-[16px] text-[13px] leading-relaxed rounded-[20px] ${
-                    isUser
-                      ? 'clay-btn-primary text-white rounded-br-[6px]'
-                      : 'clay-card text-[#3A3A38] dark:text-[#E8E4DD] rounded-bl-[6px] space-y-[10px]'
-                  }`}
-                >
-                  {/* Status Badge for Assistant Responses */}
-                  {!isUser && renderAnswerabilityBadge(msg.answerability)}
-
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
-
-                  {/* Citation Pill: Rounded pill, secondary accent color (#7FA398), linking back to exact source passage */}
-                  {!isUser && msg.citation && msg.citation.section !== 'None' && (
-                    <div className="pt-[8px] border-t border-[#C9D6C9] dark:border-[#464A52] flex items-center justify-between gap-[8px]">
-                      <span className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] truncate">
-                        Passage: {msg.citation.pageOrLabel}
-                      </span>
-                      {onJumpToSource && (
-                        <button
-                          type="button"
-                          onClick={() => onJumpToSource(msg.citation?.section || '')}
-                          className="clay-btn-secondary h-[26px] px-[10px] text-[11px] font-medium flex items-center gap-[4px] rounded-full cursor-pointer shrink-0"
-                          title="Scroll to and highlight this exact passage in the reader"
-                        >
-                          <span>Jump to source</span>
-                          <ExternalLink className="w-[10px] h-[10px]" />
-                        </button>
-                      )}
+                {msg.isError ? (
+                  <div className="max-w-[90%] p-[14px] sm:p-[16px] text-[13px] leading-relaxed rounded-[20px] rounded-bl-[6px] clay-card border border-[#E57373]/60 bg-[#E57373]/10 dark:bg-[#E57373]/20 space-y-[10px]">
+                    <div className="flex items-center gap-[6px] text-[12px] font-mono font-medium text-[#C62828] dark:text-[#EF9A9A]">
+                      <AlertCircle className="w-[14px] h-[14px] shrink-0" />
+                      <span>Technical Error Encountered</span>
                     </div>
-                  )}
-                </div>
+                    <div className="text-[#3A3A38] dark:text-[#E8E4DD] text-[13px]">
+                      {msg.content}
+                    </div>
+                    {(() => {
+                      const prevUserMsg = chatHistory
+                        .slice(0, chatHistory.findIndex((m) => m.id === msg.id))
+                        .reverse()
+                        .find((m) => m.sender === 'user');
+                      if (!prevUserMsg) return null;
+                      return (
+                        <div className="pt-[4px]">
+                          <button
+                            type="button"
+                            onClick={() => onSendMessage(prevUserMsg.content, prevUserMsg.attachedPassage)}
+                            disabled={isLoading}
+                            className="clay-btn-secondary h-[28px] px-[12px] text-[11px] font-medium flex items-center gap-[6px] rounded-full cursor-pointer disabled:opacity-50"
+                          >
+                            <RotateCcw className="w-[12px] h-[12px]" />
+                            <span>Retry Question</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* Clay Chat Bubble */
+                  <div
+                    className={`max-w-[90%] p-[14px] sm:p-[16px] text-[13px] leading-relaxed rounded-[20px] ${
+                      isUser
+                        ? 'clay-btn-primary text-white rounded-br-[6px]'
+                        : 'clay-card text-[#3A3A38] dark:text-[#E8E4DD] rounded-bl-[6px] space-y-[10px]'
+                    }`}
+                  >
+                    {/* Status Badge for Assistant Responses */}
+                    {!isUser && renderAnswerabilityBadge(msg.answerability)}
+
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+
+                    {/* Citation Pill: Rounded pill, secondary accent color (#7FA398), linking back to exact source passage */}
+                    {!isUser && msg.citation && msg.citation.section !== 'None' && (
+                      <div className="pt-[8px] border-t border-[#C9D6C9] dark:border-[#464A52] flex items-center justify-between gap-[8px]">
+                        <span className="text-[11px] font-mono text-[#8A8880] dark:text-[#9A9691] truncate">
+                          Passage: {msg.citation.pageOrLabel}
+                        </span>
+                        {onJumpToSource && (
+                          <button
+                            type="button"
+                            onClick={() => onJumpToSource(msg.citation?.section || '')}
+                            className="clay-btn-secondary h-[26px] px-[10px] text-[11px] font-medium flex items-center gap-[4px] rounded-full cursor-pointer shrink-0"
+                            title="Scroll to and highlight this exact passage in the reader"
+                          >
+                            <span>Jump to source</span>
+                            <ExternalLink className="w-[10px] h-[10px]" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })

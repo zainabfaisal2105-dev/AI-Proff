@@ -30,7 +30,7 @@ function getGemini(): GoogleGenAI | null {
 }
 
 const CANDIDATE_MODELS = [
-  "gemini-3.8-flash",
+  "gemini-2.5-flash",
   "gemini-flash-latest",
 ];
 
@@ -244,6 +244,74 @@ Return valid JSON adhering to this schema:
 }
 
 /**
+ * Selects the most relevant document sections for answering a user question,
+ * preventing context overflow on long PDFs or multi-slide presentations.
+ */
+function selectRelevantSections(
+  sections: DocumentSection[],
+  question: string,
+  attachedPassage?: { text: string; sectionRef: string }
+): DocumentSection[] {
+  if (!sections || sections.length === 0) return [];
+  const totalChars = sections.reduce((sum, s) => sum + s.content.length, 0);
+  if (totalChars <= 18000) {
+    return sections;
+  }
+
+  // Tokenize question and extract meaningful keywords
+  const stopWords = new Set([
+    'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with', 'to', 'for', 'of',
+    'can', 'you', 'simply', 'tell', 'me', 'what', 'are', 'how', 'why', 'who', 'where', 'when', 'does',
+    'explain', 'describe', 'give', 'about', 'this', 'that', 'these', 'those', 'from'
+  ]);
+  const queryTerms = (question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || [])
+    .filter((w) => !stopWords.has(w));
+
+  // Score each section
+  const scored = sections.map((sec, idx) => {
+    const text = (sec.label + ' ' + sec.content).toLowerCase();
+    let score = 0;
+
+    // Heavily weight section 0 (title/intro/overview)
+    if (idx === 0) score += 3;
+
+    // Heavily weight attached passage section
+    if (attachedPassage && attachedPassage.sectionRef && sec.label.includes(attachedPassage.sectionRef)) {
+      score += 15;
+    }
+
+    for (const term of queryTerms) {
+      if (text.includes(term)) {
+        const count = (text.match(new RegExp(term, 'g')) || []).length;
+        score += Math.min(count, 5);
+      }
+    }
+
+    return { sec, score, idx };
+  });
+
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // Take top sections up to character budget (~16,000 characters)
+  const selected: typeof scored = [];
+  let charCount = 0;
+  const maxChars = 16000;
+
+  for (const item of scored) {
+    if (selected.length < 3 || charCount + item.sec.content.length <= maxChars) {
+      selected.push(item);
+      charCount += item.sec.content.length;
+      if (charCount >= maxChars) break;
+    }
+  }
+
+  // Re-sort selected back to original document order
+  selected.sort((a, b) => a.idx - b.idx);
+  return selected.map((item) => item.sec);
+}
+
+/**
  * Document-grounded chat engine with strict scope refusal and 3 answerability levels.
  */
 export async function answerDocumentChat(
@@ -258,8 +326,13 @@ export async function answerDocumentChat(
   citation: CitationReference;
 }> {
   const ai = getGemini();
+  if (!ai) {
+    throw new Error("Gemini AI API key is not configured on the server.");
+  }
 
-  const formattedSource = sections
+  // Filter or chunk long document sections
+  const relevantSections = selectRelevantSections(sections, question, attachedPassage);
+  const formattedSource = relevantSections
     .map((s) => `=== SECTION: ${s.label} ===\n${s.content}`)
     .join('\n\n');
 
@@ -282,77 +355,101 @@ USER'S QUESTION:
 "${question}"
 
 STRICT OPERATING PRINCIPLES:
-1. STRICT SCOPE REFUSAL:
-   - If the user asks a question completely unrelated to this document (e.g. general world facts, politics, celebrity news, general coding, external trivia like "who is the president of Pakistan?", "what is the best neural net for image classification?"):
-     You MUST set "answerability": "refused_out_of_scope"
-     And respond: "That question is outside the scope of this document. I can explain how this document discusses [subject if relevant], but I cannot provide an answer based on external knowledge."
-2. THREE ANSWERABILITY LEVELS:
-   - "directly_supported": The document explicitly answers the question. State the answer clearly, referencing exact numbers and facts without assumption.
+1. THREE ANSWERABILITY LEVELS:
+   - "directly_supported": The document explicitly provides the information to answer this question. State the answer clearly and concisely, referencing exact facts and numbers without extrapolation.
    - "partially_supported": The document contains related context or partial information, but does not directly or fully answer the question. Explicitly state: "The document provides related information, but it does not explicitly answer this." Then explain only what IS supported.
-   - "not_supported": The document does not contain sufficient information to answer the question (e.g., asking why the authors chose something when the text doesn't explain their rationale). Explicitly state: "The document does not provide enough information to answer this. I don't want to infer or assume their reasoning."
-   - "refused_out_of_scope": Unrelated external inquiry.
+   - "refused_out_of_scope": The concept, term, or question is not discussed, defined, or covered in this document (e.g. asking about "deadlocks" when the document is about quantum computing, machine learning, or medical trials).
+2. OUT-OF-SCOPE REFUSAL GUIDANCE (CRITICAL):
+   - If the user asks a question about a concept or term that is NOT defined, mentioned, or addressed in this document (e.g. "can you simply tell me what are deadlocks?"):
+     You MUST set "answerability": "refused_out_of_scope".
+     In your answer, state clearly: "This document doesn't define or discuss [concept/term]. It focuses on [mention 1-2 core themes covered in this document]. Try asking about [relevant topic A] or [relevant topic B]."
 3. ZERO HALLUCINATION:
-   - Never use external world training data to answer document-specific claims.
-   - Preserve all numbers, percentages, dates, and names exactly.
-   - Give a precise citation with the section label and page/excerpt.
+   - Never use outside world training memory to invent answers for document queries.
+   - Preserve all figures, dates, and metrics verbatim.
+   - Cite the exact section and excerpt where evidence was found (or section: "None" if out of scope).
 
-Return valid JSON:
+Return a valid JSON object matching this schema:
 {
-  "answerability": "directly_supported | partially_supported | not_supported | refused_out_of_scope",
-  "answer": "Your comprehensive, clear, grounded response...",
+  "answerability": "directly_supported | partially_supported | refused_out_of_scope",
+  "answer": "Clear, grounded response...",
   "citation": {
-    "section": "Section name where evidence was found, or 'None' if out of scope / not supported",
-    "pageOrLabel": "Exact section label from source, e.g. Page 2, Section 3",
-    "excerpt": "Brief 1-line quote or key evidence from the document"
+    "section": "Section name or None",
+    "pageOrLabel": "Exact section label or None",
+    "excerpt": "Brief 1-line evidence quote or empty string"
   }
 }`;
 
-  if (ai) {
-    for (const model of CANDIDATE_MODELS) {
+  let lastError: any = null;
+
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction: "You are a research reading partner sitting beside the reader. You answer questions strictly from the uploaded document. You strictly refuse out-of-scope inquiries and distinguish directly supported, partially supported, and unsupported questions. Always respond in valid JSON.",
+          temperature: 0.1,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              answerability: {
+                type: "STRING",
+                enum: ["directly_supported", "partially_supported", "refused_out_of_scope"]
+              },
+              answer: { type: "STRING" },
+              citation: {
+                type: "OBJECT",
+                properties: {
+                  section: { type: "STRING" },
+                  pageOrLabel: { type: "STRING" },
+                  excerpt: { type: "STRING" }
+                },
+                required: ["section", "pageOrLabel"]
+              }
+            },
+            required: ["answerability", "answer", "citation"]
+          }
+        },
+      });
+
+      const text = res.text || "{}";
+      const cleaned = text.replace(/```json\n?|\n?```/g, '').trim();
+      let parsed: any;
       try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: {
-            systemInstruction: "You are a research reading partner sitting beside the reader. You answer questions strictly from the uploaded document. You strictly refuse out-of-scope inquiries and distinguish directly supported, partially supported, and unsupported questions.",
-            temperature: 0.1,
-            responseMimeType: "application/json",
-          },
-        });
-
-        const text = res.text || "{}";
-        const cleaned = text.replace(/```json\n?|\n?```/g, '').trim();
-        const parsed = JSON.parse(cleaned);
-
-        return {
-          answer: parsed.answer || "The document does not provide sufficient information to answer this.",
-          answerability: parsed.answerability || "directly_supported",
-          citation: parsed.citation || {
-            section: sections[0]?.label || "Document",
-            pageOrLabel: sections[0]?.label || "General",
-            excerpt: "",
-          },
-        };
-      } catch (err: any) {
-        console.warn(`Chat model ${model} failed:`, err?.message || err);
+        parsed = JSON.parse(cleaned);
+      } catch (jsonErr) {
+        console.warn(`[Grounded Q&A] JSON parse failed on model ${model}, attempting regex extraction:`, jsonErr);
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (match) {
+          parsed = JSON.parse(match[0]);
+        } else {
+          throw jsonErr;
+        }
       }
+
+      const answerability: AnswerabilityLevel =
+        parsed.answerability === "partially_supported" || parsed.answerability === "refused_out_of_scope"
+          ? parsed.answerability
+          : "directly_supported";
+
+      return {
+        answer: parsed.answer || "The document does not provide sufficient information to answer this.",
+        answerability,
+        citation: parsed.citation || {
+          section: relevantSections[0]?.label || "Document",
+          pageOrLabel: relevantSections[0]?.label || "General",
+          excerpt: "",
+        },
+      };
+    } catch (err: any) {
+      lastError = err;
+      console.error(`[Grounded Q&A] Gemini API error on model ${model}:`, err?.message || err, err?.stack);
     }
   }
 
-  // Fallback if AI unavailable
-  const matchingSection = sections.find((s) =>
-    s.content.toLowerCase().includes(question.toLowerCase().slice(0, 20))
-  ) || sections[0];
-
-  return {
-    answer: `According to ${matchingSection?.label || 'the source'}, the document details specific parameters and results relevant to your query, but live AI inference is temporarily unavailable to synthesize an interactive response.`,
-    answerability: 'partially_supported',
-    citation: {
-      section: matchingSection?.label || 'General',
-      pageOrLabel: matchingSection?.label || 'General',
-      excerpt: matchingSection?.content.slice(0, 120) || '',
-    },
-  };
+  // If live AI models failed, throw error to trigger frontend retry state
+  throw new Error(lastError?.message || "Technical failure retrieving grounded Q&A response from AI engine.");
 }
 
 /**

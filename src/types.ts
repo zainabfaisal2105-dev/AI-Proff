@@ -157,6 +157,7 @@ export interface ChatMessage {
   answerability?: AnswerabilityLevel;
   citation?: CitationReference;
   isStreaming?: boolean;
+  isError?: boolean;
 }
 
 export interface UserNote {
